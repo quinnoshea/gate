@@ -15,28 +15,36 @@ The `docs/` directory contains the authoritative specification for Gate. **Code 
 
 ## Documentation Structure
 
-### META.md (This File)
-- **Purpose**: Instructions for contributors and LLMs on how to work with this project
-- **Update frequency**: Rarely - only when documentation workflow changes
-- **Audience**: First-time contributors, LLMs starting new sessions
+### README.md
+- **Purpose**: Quick start guide for new developers
+- **Content**: Setup instructions, basic commands, project status overview
+- **Update frequency**: Moderate - update when setup process or basic workflows change
+- **Audience**: New developers, first-time contributors
 
-### OVERVIEW.md
+### docs/OVERVIEW.md
 - **Purpose**: Highest-level project description - what Gate is, why it exists, core value proposition
 - **Content**: Features, use cases, business context, user benefits, technology overview
 - **Update frequency**: Rare - only for strategic repositioning, major pivots, or significant feature additions
 - **Audience**: Executives, users, potential contributors, marketing material
 
-### DESIGN.md  
+### docs/DESIGN.md  
 - **Purpose**: Technical architecture reference and component map
 - **Content**: System components, data flows, security model, interfaces, file structure
 - **Update frequency**: Frequent - update whenever technical decisions are made or ambiguities are discovered
 - **Audience**: Developers, technical contributors, system integrators
 
-### PLAN.md
+### docs/PLAN.md
 - **Purpose**: Step-by-step implementation roadmap with concrete tasks
 - **Content**: Development phases, detailed tasks with code examples, testing requirements, timelines
 - **Update frequency**: Continuous - check off completed tasks, update future tasks based on learnings
 - **Audience**: Active developers, project managers, implementation teams
+
+## For Code Agents
+
+### docs/META.md (This File)
+- **Purpose**: Instructions for LLMs and code agents on how to work with this project's documentation-driven development approach
+- **Update frequency**: Rarely - only when documentation workflow changes
+- **Audience**: LLMs, code agents, those wanting to understand the prompting approach
 
 ## Current Project Status
 

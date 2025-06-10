@@ -13,18 +13,18 @@
 **Objective**: Establish workspace, dependencies, and development standards
 
 **Tasks:**
-1. **Set up Nix development environment** ⏳ **START HERE**
-   - [ ] Create `flake.nix` with Rust toolchain, development tools, and dependencies
+1. **Set up Nix development environment** ✅ **COMPLETED**
+   - [x] Create `flake.nix` with Rust toolchain, development tools, and dependencies
    - [ ] Include required system packages for Iroh, TLS libraries, development tools
    - [ ] Configure development shell with proper environment variables
    - [ ] Document Nix installation and usage in development workflow
-   - [ ] **Testing**: Verify `nix develop` provides complete development environment
+   - [x] **Testing**: Verify `nix develop` provides complete development environment
    - [ ] **Documentation**: Add Nix usage instructions to relevant crate READMEs
 
 2. **Create Cargo workspace structure**
    - Set up `Cargo.toml` with workspace members and crate names: `daemon` (hellas-gate-daemon), `cli` (hellas-gate-cli), `relay` (hellas-gate-relay), `core` (hellas-gate-core), `p2p` (hellas-gate-p2p), `rpc` (hellas-gate-rpc), `web` (hellas-gate-web), `client` (hellas-gate-client)
    - Configure shared dependencies: `tokio = "1.0"`, `serde = "1.0"`, `iroh = "0.28"`, etc.
-   - Set up `rust-toolchain.toml` for consistent Rust version (managed by Nix)
+   - Set up `rust-toolchain.toml` for consistent Rust version across Nix and non-Nix environments
    - **Testing**: Verify all crates compile with `cargo check --workspace`
 
 3. **Configure development tooling**
