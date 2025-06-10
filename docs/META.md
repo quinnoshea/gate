@@ -27,7 +27,7 @@ The `docs/` directory contains the authoritative specification for Gate. **Code 
 - **Update frequency**: Rare - only for strategic repositioning, major pivots, or significant feature additions
 - **Audience**: Executives, users, potential contributors, marketing material
 
-### docs/DESIGN.md  
+### docs/DESIGN.md
 - **Purpose**: Technical architecture reference and component map
 - **Content**: System components, data flows, security model, interfaces, file structure
 - **Update frequency**: Frequent - update whenever technical decisions are made or ambiguities are discovered
@@ -51,7 +51,7 @@ The `docs/` directory contains the authoritative specification for Gate. **Code 
 **Gate** is a peer-to-peer AI compute network that provides secure, private access to distributed inference resources. The project consists of:
 
 - **Local daemon** providing OpenAI-compatible APIs
-- **P2P networking** using Iroh for encrypted communication  
+- **P2P networking** using Iroh for encrypted communication
 - **Web management interface** built with Yew
 - **Public HTTPS endpoints** via relay infrastructure
 - **Trust-based permissions** for secure resource sharing
@@ -89,7 +89,7 @@ The `docs/` directory contains the authoritative specification for Gate. **Code 
 **Next Action**: Always start with the first unchecked task in PLAN.md. Currently this is:
 - Phase 1, Task 1.1: Create Cargo workspace structure
 
-**Development Environment**: 
+**Development Environment**:
 - We use Nix for reproducible development environments
 - Nix setup is included as a task in PLAN.md - will provide Rust toolchain automatically
 - For now: ensure you have basic Rust toolchain installed manually
@@ -112,9 +112,9 @@ The `docs/` directory contains the authoritative specification for Gate. **Code 
 - **Refinements**: Better explanations of existing features, new use cases, improved clarity
 - **Avoid**: Technical implementation details, temporary decisions, work-in-progress features
 
-### DESIGN.md Updates  
+### DESIGN.md Updates
 - **Required for**: New components, changed interfaces, security decisions, protocol changes
-- **Include**: Updated code examples, new data flows, architectural diagrams  
+- **Include**: Updated code examples, new data flows, architectural diagrams
 - **Keep current**: Never let implementation diverge from documented design
 
 ### PLAN.md Updates

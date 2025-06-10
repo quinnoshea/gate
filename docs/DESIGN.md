@@ -11,7 +11,7 @@ The main library that coordinates all system functionality. Can be embedded in o
 
 **Responsibilities:**
 - HTTP API server (OpenAI-compatible endpoints)
-- P2P networking and message handling  
+- P2P networking and message handling
 - Request routing and response forwarding
 - Configuration management and hot-reloading
 - Provider integration (Ollama, LM Studio)
@@ -27,36 +27,42 @@ The main library that coordinates all system functionality. Can be embedded in o
 - `config_manager.rs` - Configuration loading and validation ([PLAN.md#configuration-management](PLAN.md#configuration-management))
 
 
-### P2P Networking (`crates/p2p/`)
+### P2P Networking (`crates/p2p/`) ✅ **IMPLEMENTED**
 Handles all peer-to-peer communication using Iroh.
 
-**Protocol layers:**
-- **Transport**: Iroh QUIC streams for encrypted communication
-- **Protocol Negotiation**: Explicit `protocol::v1` header on stream establishment
-- **Stream Multiplexing**: Multiple concurrent streams over single connection (control, HTTP proxy, etc.)
-- **Node Discovery**: DHT-based peer discovery and manual peer addition
-- **Message Protocol**: JSON-based control messages over dedicated streams
-- **Connection Management**: Connection pooling, heartbeat, reconnection logic
+**Current Implementation:**
+- **Transport**: Iroh QUIC streams for encrypted communication ✅
+- **Protocol Negotiation**: Custom ALPN "gate/1.0" for Gate protocol ✅
+- **Stream Multiplexing**: Bidirectional streams over QUIC connections ✅
+- **Node Discovery**: Automatic via Iroh's built-in mechanisms ✅
+- **Connection Management**: Connection pooling and lifecycle management ✅
 
-**Key types:**
+**Implemented API:**
 ```rust
-// Defined in crates/core/src/types.rs
-pub struct NodeId(pub PublicKey); // 32-byte Ed25519 public key
-pub struct PeerInfo {
-    pub node_id: NodeId,
-    pub last_seen: SystemTime,
-    pub connection_status: ConnectionStatus,
-    pub capabilities: Option<Capabilities>,
-    pub addresses: Vec<SocketAddr>,
+// crates/p2p/src/node.rs - IMPLEMENTED
+pub struct P2PNode {
+    endpoint: Endpoint,
+    node_id: NodeId,
+    connections: Arc<RwLock<HashMap<NodeId, Connection>>>,
 }
 
-pub enum ConnectionStatus {
-    Connected,
-    Connecting, 
-    Disconnected,
-    Failed(String),
+impl P2PNode {
+    pub async fn new() -> Result<Self>;
+    pub async fn connect_to_peer(&self, addr: NodeAddr) -> Result<()>;
+    pub async fn send_message(&self, peer_id: NodeId, message: &[u8]) -> Result<()>;
+    pub fn node_id(&self) -> NodeId;
+    pub async fn node_addr(&self) -> Result<NodeAddr>;
+    pub async fn start_listening(&self) -> Result<()>;
+    pub async fn connected_peers(&self) -> Vec<NodeId>;
 }
 ```
+
+**Status**: Basic P2P foundation complete. See `crates/p2p/README.md` for detailed API documentation.
+
+**Future Work**:
+- Structured message protocol (currently raw bytes)
+- Message routing and handlers
+- Request/response correlation
 
 ### RPC Interface (`crates/rpc/`)
 JSON-RPC interface for daemon control and monitoring.
@@ -82,7 +88,7 @@ Shared data structures and protocol definitions.
 #[derive(Serialize, Deserialize)]
 pub struct Configuration {
     pub node: NodeConfig,
-    pub network: NetworkConfig, 
+    pub network: NetworkConfig,
     pub providers: Vec<ProviderConfig>,
     pub security: SecurityConfig,
     pub web: WebConfig,
@@ -90,13 +96,13 @@ pub struct Configuration {
 
 pub struct NodeConfig {
     pub identity: Identity,           // Private key, public key
-    pub data_dir: PathBuf,           // ~/.config/gate/ 
+    pub data_dir: PathBuf,           // ~/.config/gate/
     pub log_level: String,           // debug, info, warn, error
 }
 
 pub struct NetworkConfig {
     pub p2p_port: u16,               // Default: 41145
-    pub http_port: u16,              // Default: 31145  
+    pub http_port: u16,              // Default: 31145
     pub control_port: u16,           // Default: 8145
     pub trusted_peers: Vec<NodeId>,  // Allowed to make requests
     pub max_connections: usize,      // Connection pool size
@@ -194,7 +200,7 @@ pub struct PeerManager {
     pub peers: Vec<PeerInfo>,
     pub connection_states: HashMap<NodeId, ConnectionStatus>,
 }
-``` 
+```
 
 ### CLI Tool (`crates/cli/`)
 Command-line interface for daemon management.
@@ -202,7 +208,7 @@ Command-line interface for daemon management.
 **Command structure:**
 ```bash
 gate daemon [--config PATH] [--background]  # Start daemon
-gate stop                                   # Stop daemon  
+gate stop                                   # Stop daemon
 gate status                                 # Show status
 gate peers add <NODE_ID> [ADDRESS]         # Add peer
 gate peers list                             # List peers
@@ -242,7 +248,7 @@ Public HTTPS proxy for browser-compatible endpoints.
 4. HTTP client forwards to provider (e.g., `localhost:11434/v1/chat/completions`)
 5. Provider response streamed back to client
 
-### Remote Inference Request  
+### Remote Inference Request
 1. Client → `POST localhost:31145/v1/chat/completions` with `X-Target-Node: <node_id>`
 2. HTTP server validates request, checks if peer is trusted
 3. P2P manager opens control stream to target node with `protocol::v1`
@@ -271,7 +277,7 @@ Public HTTPS proxy for browser-compatible endpoints.
 - **HTTPS**: TLS termination at node for public endpoints using `rustls` library
 - **At Rest**: Private keys encrypted with system keyring
 
-### Authorization  
+### Authorization
 - **Peer Access**: Only trusted peers can make inference requests
 - **Local API**: Binds to localhost only, requires local access
 - **Control Interface**: Optional authentication token
@@ -312,7 +318,7 @@ Public HTTPS proxy for browser-compatible endpoints.
 ~/.config/gate/
 ├── config.json          # Main configuration
 ├── identity.key         # Node private key (encrypted)
-├── peers.json           # Peer information cache (mutable JSON state)  
+├── peers.json           # Peer information cache (mutable JSON state)
 ├── logs/                # Request logs (if enabled)
 │   ├── requests.jsonl   # Inference request history
 │   └── daemon.log       # Daemon logs
@@ -330,7 +336,7 @@ Configuration changes automatically reload without daemon restart (where safe). 
 - **Web**: All browsers supporting WebAssembly
 - **Architecture**: Native binaries + WASM components
 
-### Future Targets  
+### Future Targets
 - **Mobile**: iOS app, Android app (using same Rust core)
 - **Server**: Docker containers, cloud deployment
 - **Embedded**: Raspberry Pi, embedded Linux devices
@@ -339,7 +345,7 @@ Configuration changes automatically reload without daemon restart (where safe). 
 
 ### Unit Tests
 - **Core types**: Serialization, validation, conversion
-- **Crypto**: Key generation, signing, verification  
+- **Crypto**: Key generation, signing, verification
 - **Protocol**: Message parsing, handshake flows
 - **Configuration**: Loading, validation, migration
 
@@ -379,7 +385,7 @@ Configuration changes automatically reload without daemon restart (where safe). 
 Development follows a "fast as we can correctly" approach with AI assistance, prioritizing correctness over speed.
 
 **Phase 1**: Core infrastructure and basic P2P communication
-**Phase 2**: HTTP API and local provider integration  
+**Phase 2**: HTTP API and local provider integration
 **Phase 3**: Web frontend and control interface
 **Phase 4**: Public relay system and HTTPS endpoints
 **Phase 5**: Mobile applications and advanced features

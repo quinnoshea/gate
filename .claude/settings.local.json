@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "mcp__github__list_commits",
+      "mcp__github__get_file_contents",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh workflow view:*)",
+      "Bash(gh workflow:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(cargo check:*)",
+      "Bash(rg:*)",
+      "Bash(true)",
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:github.com)",
+      "Bash(mkdir:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo search:*)",
+      "Bash(cargo info:*)",
+      "Bash(RUST_LOG=hellas_gate_p2p=debug cargo test --package hellas-gate-p2p -- --nocapture)",
+      "Bash(cargo clippy:*)"
+    ],
+    "deny": []
+  }
+}

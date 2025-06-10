@@ -1,0 +1,42 @@
+[alias]
+# Common development commands
+check-all = "check --workspace --all-targets"
+test-all = "test --workspace --all-targets"
+clippy-all = "clippy --workspace --all-targets -- -D warnings"
+fmt-all = "fmt --all"
+build-release = "build --workspace --release"
+
+# Build configurations
+[build]
+# Enable debug info for release builds (useful for profiling)
+rustflags = ["-C", "force-frame-pointers=yes"]
+
+[target.x86_64-unknown-linux-gnu]
+# Optimizations for Linux builds
+rustflags = ["-C", "target-cpu=native"]
+
+[target.x86_64-apple-darwin]
+# Optimizations for macOS builds
+rustflags = ["-C", "target-cpu=native"]
+
+[target.x86_64-pc-windows-msvc]
+# Windows-specific configurations
+rustflags = ["-C", "target-cpu=native"]
+
+# Development profile optimizations
+[profile.dev]
+# Keep debug info but speed up builds
+debug = 1
+incremental = true
+
+[profile.release]
+# Production optimizations
+debug = 1
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+
+# Test profile with faster compilation
+[profile.test]
+debug = 1
+opt-level = 1

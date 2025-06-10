@@ -14,12 +14,24 @@
         pkgs = import nixpkgs {
           inherit system overlays;
         };
-        
+
         rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
       in
       {
         devShells.default = pkgs.mkShell {
-          buildInputs = [ rustToolchain ];
+          buildInputs = [
+            rustToolchain
+            pkgs.gh
+            pkgs.pre-commit
+          ];
+
+          RUST_LOG = "info";
+
+          shellHook = ''
+            echo "Gate development environment"
+            echo "Rust version: $(rustc --version)"
+            echo "RUST_LOG set to: $RUST_LOG"
+          '';
         };
       });
 }

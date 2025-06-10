@@ -39,11 +39,11 @@
    - Configure different log outputs: console (development), file (production), JSON (monitoring)
    - **Testing**: Unit tests for log formatting and filtering
 
-5. **Set up CI/CD pipeline**
-   - GitHub Actions workflow for testing on macOS, Linux, Windows
-   - Automated testing, linting, and formatting checks
-   - Security scanning with `cargo-audit`
-   - **Testing**: Verify CI passes on clean repository
+5. **Set up CI/CD pipeline** ✅ **COMPLETED**
+   - [x] GitHub Actions workflow for testing on macOS, Linux, Windows
+   - [x] Automated testing, linting, and formatting checks
+   - [x] Security scanning with `cargo-audit`
+   - [x] **Testing**: Verify CI passes on clean repository
 
 ### 1.2 Core Types and Cryptography
 **Objective**: Define fundamental data structures and security primitives
@@ -56,7 +56,7 @@
        pub private_key: Ed25519PrivateKey,
        pub public_key: Ed25519PublicKey,
    }
-   
+
    impl Identity {
        pub fn generate() -> Self { /* ... */ }
        pub fn from_private_key(key: &[u8]) -> Result<Self> { /* ... */ }
@@ -74,7 +74,7 @@
    // crates/core/src/node.rs
    #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
    pub struct NodeId(pub [u8; 32]); // Ed25519 public key bytes
-   
+
    impl NodeId {
        pub fn from_public_key(key: &Ed25519PublicKey) -> Self { /* ... */ }
        pub fn to_hex(&self) -> String { /* ... */ }
@@ -96,18 +96,18 @@
        pub payload: MessagePayload,
        pub signature: Option<Signature>, // None for unsigned control messages
    }
-   
+
    pub type MessageId = [u8; 16]; // UUID v4 bytes
-   
+
    #[derive(Debug, Clone, Serialize, Deserialize)]
    pub enum MessagePayload {
-       Handshake { 
+       Handshake {
            node_id: NodeId,
            protocol_version: u8,
            capabilities: Capabilities,
        },
-       HandshakeResponse { 
-           accepted: bool, 
+       HandshakeResponse {
+           accepted: bool,
            reason: Option<String>,
            capabilities: Option<Capabilities>,
        },
@@ -134,14 +134,14 @@
        pub security: SecurityConfig,
        pub web: WebConfig,
    }
-   
+
    #[derive(Debug, Clone, Serialize, Deserialize)]
    pub struct NodeConfig {
        pub data_dir: PathBuf,
        pub log_level: String, // "trace", "debug", "info", "warn", "error"
        pub identity_file: PathBuf, // Path to private key file
    }
-   
+
    #[derive(Debug, Clone, Serialize, Deserialize)]
    pub struct NetworkConfig {
        pub p2p_port: u16,           // Default: 41145
@@ -160,76 +160,46 @@
 
 ## Phase 2: P2P Networking
 
-### 2.1 Iroh Integration and Connection Management
+### 2.1 Iroh Integration and Connection Management ✅ **COMPLETED**
 **Objective**: Establish secure peer-to-peer communication foundation
 
 **Tasks:**
-1. **Set up Iroh node and connection handling**
-   ```rust
-   // crates/p2p/src/node.rs
-   pub struct P2PNode {
-       iroh_node: iroh::Node,
-       identity: Identity,
-       peers: Arc<RwLock<HashMap<NodeId, PeerInfo>>>,
-       message_handlers: HashMap<String, Box<dyn MessageHandler>>,
-   }
-   
-   impl P2PNode {
-       pub async fn new(identity: Identity, config: NetworkConfig) -> Result<Self> { /* ... */ }
-       pub async fn connect_to_peer(&self, node_id: NodeId, address: Option<SocketAddr>) -> Result<()> { /* ... */ }
-       pub async fn send_message(&self, target: NodeId, message: Message) -> Result<MessageId> { /* ... */ }
-       pub async fn start_http_proxy(&self, target: NodeId, path: String) -> Result<Box<dyn AsyncRead + AsyncWrite>> { /* ... */ }
-   }
-   ```
-   - Integrate with Iroh's DHT for peer discovery
-   - Implement connection pooling and lifecycle management
-   - Handle network failures and automatic reconnection
-   - **Testing**: Connection establishment, message delivery, failure recovery
+1. **Set up Iroh node and connection handling** ✅ **COMPLETED**
+   - [x] Iroh endpoint creation with custom ALPN protocol ("gate/1.0")
+   - [x] Connection pooling and lifecycle management
+   - [x] Automatic peer discovery via Iroh's built-in mechanisms
+   - [x] **Testing**: End-to-end connection establishment and message delivery verified
+   - [x] **Implementation**: See `crates/p2p/README.md` for complete API documentation
 
-2. **Implement peer discovery and management**
-   ```rust
-   // crates/p2p/src/discovery.rs
-   #[derive(Debug, Clone, Serialize, Deserialize)]
-   pub struct PeerInfo {
-       pub node_id: NodeId,
-       pub addresses: Vec<SocketAddr>,
-       pub last_seen: SystemTime,
-       pub connection_status: ConnectionStatus,
-       pub capabilities: Option<Capabilities>,
-       pub trust_level: TrustLevel,
-   }
-   
-   #[derive(Debug, Clone, Serialize, Deserialize)]
-   pub enum ConnectionStatus {
-       Connected { since: SystemTime },
-       Connecting { attempts: u32 },
-       Disconnected { reason: Option<String> },
-       Failed { error: String, last_attempt: SystemTime },
-   }
-   
-   pub enum TrustLevel {
-       Trusted,    // In trusted_peers config
-       Known,      // Previously connected
-       Unknown,    // Discovered but never connected
-   }
-   ```
-   - Auto-discovery via DHT with trust verification
-   - Manual peer addition with address hints
-   - Peer reputation tracking based on connection reliability
-   - **Testing**: Discovery mechanisms, trust validation, reputation updates
+2. **Implement peer discovery and management** ✅ **COMPLETED**
+   - [x] Automatic peer discovery via Iroh's built-in mechanisms
+   - [x] Connection establishment and tracking
+   - [x] Connection status monitoring (connected/disconnected peers)
+   - [x] **Testing**: Verified with end-to-end connection tests
+   - [x] **Implementation**: Basic peer management implemented in `P2PNode`
+   - [ ] **Future**: Advanced peer metadata (trust levels, capabilities) - moved to Phase 3
 
-3. **Create message routing and handling**
+3. **Implement graceful shutdown functionality** ✅ **COMPLETED**
+   - [x] Cancellation token-based shutdown signaling using `tokio_util::sync::CancellationToken`
+   - [x] Close all active connections using Iroh's `connection.close()` method
+   - [x] Background task lifecycle management with timeout handling
+   - [x] Endpoint closure using `endpoint.close().await`
+   - [x] API methods: `shutdown()`, `shutdown_with_timeout()`, `is_shutting_down()`
+   - [x] **Testing**: Comprehensive shutdown tests (basic, with connections, timeout, post-shutdown operations)
+   - [x] **Implementation**: Added to `P2PNode` in `crates/p2p/src/node.rs`
+
+4. **Create message routing and handling**
    ```rust
    // crates/p2p/src/router.rs
    pub trait MessageHandler: Send + Sync {
        async fn handle_message(&self, from: NodeId, message: Message) -> Result<Option<Message>>;
    }
-   
+
    pub struct MessageRouter {
        handlers: HashMap<String, Arc<dyn MessageHandler>>,
        pending_requests: Arc<RwLock<HashMap<MessageId, tokio::sync::oneshot::Sender<Message>>>>,
    }
-   
+
    impl MessageRouter {
        pub fn register_handler(&mut self, message_type: &str, handler: Arc<dyn MessageHandler>) { /* ... */ }
        pub async fn route_message(&self, from: NodeId, message: Message) -> Result<()> { /* ... */ }
@@ -253,7 +223,7 @@
        trusted_peers: HashSet<NodeId>,
        capabilities: Capabilities,
    }
-   
+
    impl HandshakeHandler {
        pub async fn initiate_handshake(&self, target: NodeId) -> Result<Capabilities> {
            // 1. Send handshake with our capabilities
@@ -261,7 +231,7 @@
            // 3. Verify peer is trusted
            // 4. Return peer capabilities
        }
-       
+
        pub async fn handle_handshake(&self, from: NodeId, handshake: HandshakeMessage) -> Result<HandshakeResponse> {
            // 1. Verify peer is in trusted list
            // 2. Validate protocol version compatibility
@@ -287,7 +257,7 @@
        pub load_factor: f32, // 0.0 = idle, 1.0 = overloaded
        pub features: HashSet<String>, // "relay", "public-endpoint", etc.
    }
-   
+
    #[derive(Debug, Clone, Serialize, Deserialize)]
    pub struct ModelInfo {
        pub name: String,
@@ -309,13 +279,13 @@
        pong_timeout: Duration,  // Default: 10 seconds
        max_missed_pongs: u32,   // Default: 3
    }
-   
+
    impl KeepAliveManager {
        pub async fn start_keepalive(&self, peer: NodeId) -> Result<()> {
            // Send periodic pings, track pong responses
            // Disconnect peer after max_missed_pongs
        }
-       
+
        pub async fn handle_ping(&self, from: NodeId, nonce: u64) -> Result<()> {
            // Respond with pong containing same nonce
        }
@@ -341,7 +311,7 @@
        p2p_node: Arc<P2PNode>,
        config: HttpConfig,
    }
-   
+
    pub async fn create_router() -> Router {
        Router::new()
            .route("/v1/chat/completions", post(chat_completions))
@@ -371,7 +341,7 @@
        pub top_p: Option<f32>,
        // ... other OpenAI parameters
    }
-   
+
    pub async fn chat_completions(
        State(app_state): State<AppState>,
        Json(request): Json<ChatCompletionRequest>,
@@ -400,7 +370,7 @@
        pub provider: String, // Extension: "ollama", "lmstudio", "remote"
        pub node_id: Option<NodeId>, // Extension: for remote models
    }
-   
+
    pub async fn list_models(State(app_state): State<AppState>) -> Result<Json<ModelsResponse>, AppError> {
        // 1. Collect models from local providers
        // 2. Collect models from connected peers
@@ -426,7 +396,7 @@
        async fn chat_completion(&self, request: ChatCompletionRequest) -> Result<ChatCompletionResponse>;
        async fn chat_completion_stream(&self, request: ChatCompletionRequest) -> Result<Pin<Box<dyn Stream<Item = Result<ChatCompletionChunk>>>>>;
    }
-   
+
    #[derive(Debug)]
    pub struct ProviderHealth {
        pub status: HealthStatus,
@@ -434,7 +404,7 @@
        pub available_models: usize,
        pub error: Option<String>,
    }
-   
+
    pub enum HealthStatus {
        Healthy,
        Degraded,
@@ -456,16 +426,16 @@
        model_cache: Arc<RwLock<Vec<ModelInfo>>>,
        last_health_check: Arc<RwLock<Option<SystemTime>>>,
    }
-   
+
    impl OllamaProvider {
        pub async fn new(base_url: Url) -> Result<Self> {
            // Initialize client, verify connection
        }
-       
+
        async fn discover_models(&self) -> Result<Vec<ModelInfo>> {
            // GET /api/tags to list available models
        }
-       
+
        async fn transform_request(&self, request: ChatCompletionRequest) -> Result<OllamaRequest> {
            // Convert OpenAI format to Ollama format
        }
@@ -484,7 +454,7 @@
        base_url: Url,
        // Similar structure to OllamaProvider
    }
-   
+
    impl InferenceProvider for LMStudioProvider {
        // LM Studio uses OpenAI-compatible API, so minimal transformation needed
    }
@@ -502,13 +472,13 @@
        discovery_interval: Duration,
        health_check_interval: Duration,
    }
-   
+
    impl ProviderManager {
        pub async fn start_discovery(&self) -> Result<()> {
            // Periodically scan for new providers on common ports
            // Add/remove providers based on availability
        }
-       
+
        pub async fn route_request(&self, model: &str, request: ChatCompletionRequest) -> Result<ChatCompletionResponse> {
            // Find provider that supports the requested model
            // Route request with load balancing
@@ -534,34 +504,34 @@
        p2p_node: Arc<P2PNode>,
        provider_manager: Arc<ProviderManager>,
    }
-   
+
    impl RpcMethods {
        // Node management
        pub async fn node_status(&self) -> Result<NodeStatus>;
        pub async fn node_shutdown(&self) -> Result<()>;
        pub async fn node_restart(&self) -> Result<()>;
-       
-       // Peer management  
+
+       // Peer management
        pub async fn add_peer(&self, node_id: NodeId, address: Option<SocketAddr>) -> Result<()>;
        pub async fn remove_peer(&self, node_id: NodeId) -> Result<()>;
        pub async fn list_peers(&self) -> Result<Vec<PeerInfo>>;
        pub async fn peer_info(&self, node_id: NodeId) -> Result<PeerInfo>;
-       
+
        // Configuration
        pub async fn get_config(&self) -> Result<Configuration>;
        pub async fn update_config(&self, config: Configuration) -> Result<()>;
        pub async fn validate_config(&self, config: Configuration) -> Result<Vec<ValidationError>>;
-       
+
        // Providers
        pub async fn list_providers(&self) -> Result<Vec<ProviderInfo>>;
        pub async fn add_provider(&self, provider_config: ProviderConfig) -> Result<()>;
        pub async fn test_provider(&self, url: Url) -> Result<ProviderHealth>;
-       
+
        // Monitoring
        pub async fn get_metrics(&self) -> Result<MetricsSnapshot>;
        pub async fn request_history(&self, limit: Option<usize>) -> Result<Vec<RequestInfo>>;
        pub async fn get_logs(&self, level: Option<String>, limit: Option<usize>) -> Result<Vec<LogEntry>>;
-       
+
        // Identity management
        pub async fn generate_keypair(&self) -> Result<Identity>;
        pub async fn export_identity(&self) -> Result<String>; // PEM format
@@ -580,22 +550,22 @@
        methods: Arc<RpcMethods>,
        websocket_connections: Arc<RwLock<HashMap<ConnectionId, WebSocketSender>>>,
    }
-   
+
    impl RpcServer {
        pub async fn handle_http_request(&self, request: JsonRpcRequest) -> JsonRpcResponse {
            // Handle single request/response
        }
-       
+
        pub async fn handle_websocket(&self, socket: WebSocket) -> Result<()> {
            // Handle persistent connection with real-time updates
            // Send events: peer_connected, peer_disconnected, request_completed, etc.
        }
-       
+
        pub async fn broadcast_event(&self, event: RpcEvent) -> Result<()> {
            // Send real-time updates to all connected WebSocket clients
        }
    }
-   
+
    #[derive(Debug, Serialize)]
    pub enum RpcEvent {
        PeerConnected { node_id: NodeId, capabilities: Capabilities },
@@ -618,13 +588,13 @@
        rate_limiter: RateLimiter,
        require_auth: bool,
    }
-   
+
    impl RpcAuth {
        pub fn validate_request(&self, headers: &HeaderMap) -> Result<()> {
            // Check API token if authentication required
            // Apply rate limiting per client
        }
-       
+
        pub fn generate_token(&self) -> String {
            // Generate secure random API token
        }
@@ -644,7 +614,7 @@
    // crates/web/src/main.rs
    use yew::prelude::*;
    use yew_router::prelude::*;
-   
+
    #[derive(Clone, Routable, PartialEq)]
    enum Route {
        #[at("/")]
@@ -660,7 +630,7 @@
        #[at("/setup")]
        Setup,
    }
-   
+
    #[function_component(App)]
    fn app() -> Html {
        html! {
@@ -680,16 +650,16 @@
    // crates/web/src/components/dashboard.rs
    #[derive(Properties, PartialEq)]
    pub struct DashboardProps {}
-   
+
    #[function_component(Dashboard)]
    pub fn dashboard(_props: &DashboardProps) -> Html {
        let node_status = use_state(|| None::<NodeStatus>);
        let peer_count = use_state(|| 0usize);
        let recent_requests = use_state(|| Vec::<RequestInfo>::new());
-       
+
        // WebSocket connection for real-time updates
        let websocket = use_websocket("ws://localhost:8145/rpc/ws");
-       
+
        html! {
            <div class="dashboard">
                <StatusCard node_status={(*node_status).clone()} />
@@ -712,7 +682,7 @@
    pub fn peer_manager() -> Html {
        let peers = use_state(|| Vec::<PeerInfo>::new());
        let add_peer_modal = use_state(|| false);
-       
+
        let add_peer = {
            let peers = peers.clone();
            Callback::from(move |peer_info: PeerInfo| {
@@ -720,7 +690,7 @@
                // Update local state
            })
        };
-       
+
        html! {
            <div class="peer-manager">
                <PeerList peers={(*peers).clone()} />
@@ -745,7 +715,7 @@
        let config = use_state(|| None::<Configuration>);
        let validation_errors = use_state(|| Vec::<ValidationError>::new());
        let is_dirty = use_state(|| false);
-       
+
        let save_config = {
            let config = config.clone();
            Callback::from(move |_| {
@@ -754,11 +724,11 @@
                // Show success/error feedback
            })
        };
-       
+
        html! {
            <div class="config-manager">
-               <ConfigForm 
-                   config={(*config).clone()} 
+               <ConfigForm
+                   config={(*config).clone()}
                    errors={(*validation_errors).clone()}
                    on_change={/* update config state */}
                />
@@ -785,7 +755,7 @@
        pub trust_settings: TrustSettings,
        pub public_endpoint: Option<PublicEndpointConfig>,
    }
-   
+
    #[derive(Debug, Clone, PartialEq)]
    pub enum SetupStep {
        Welcome,           // Introduction and overview
@@ -796,18 +766,18 @@
        Review,           // Review all settings before save
        Complete,         // Setup finished, start daemon
    }
-   
+
    pub enum IdentityChoice {
        Generate,          // Generate new keypair
        Import(String),    // Import from PEM data
        LoadExisting,      // Use existing identity file
    }
-   
+
    pub struct TrustSettings {
        pub mode: TrustMode,
        pub trusted_keys: Vec<NodeId>,
    }
-   
+
    pub enum TrustMode {
        Private,           // No external access
        Friends,           // Manually added trusted keys
@@ -816,17 +786,17 @@
    ```
    **Setup wizard questions and flow:**
    - **Step 1 - Welcome**: Explain Private Gate and setup process
-   - **Step 2 - Identity**: 
+   - **Step 2 - Identity**:
      - "Generate new identity" (recommended for new users)
      - "Import existing identity" (for users with existing keys)
      - "Use existing identity file" (if identity.key already exists)
-   - **Step 3 - Providers**: 
+   - **Step 3 - Providers**:
      - Auto-scan for Ollama (port 11434), LM Studio (port 1234)
      - Show discovered providers with model counts
      - Allow manual provider addition
      - "Which providers should be enabled?" (checkboxes)
    - **Step 4 - Trust Settings**:
-     - "Who should be allowed to use your compute?" 
+     - "Who should be allowed to use your compute?"
      - Options: "Just me" (private), "Specific friends" (manual keys), "Public" (not recommended)
      - If "friends" selected: interface to add trusted public keys
    - **Step 5 - Public Endpoint** (optional):
@@ -852,14 +822,14 @@
        routing_strategy: RoutingStrategy,
        load_balancer: LoadBalancer,
    }
-   
+
    pub enum RoutingStrategy {
        LocalOnly,                    // Never route to remote peers
        PreferLocal,                  // Try local first, fallback to remote
        LoadBalance,                  // Distribute based on capacity
        ExplicitTarget(NodeId),       // Route to specific peer
    }
-   
+
    impl RequestRouter {
        pub async fn route_request(&self, request: ChatCompletionRequest) -> Result<ChatCompletionResponse> {
            // 1. Determine routing strategy based on request and config
@@ -867,12 +837,12 @@
            // 3. Execute request with timeout and retry logic
            // 4. Return response or error
        }
-       
+
        async fn select_target(&self, model: &str) -> Result<RoutingTarget> {
            // Consider model availability, load factors, latency
        }
    }
-   
+
    pub enum RoutingTarget {
        Local(String),               // Local provider name
        Remote(NodeId, String),      // Remote node + model name
@@ -898,13 +868,13 @@
        pub latency: Option<Duration>,
        pub tokens: Option<TokenUsage>,
    }
-   
+
    pub enum RequestSource {
        Local(IpAddr),               // Local HTTP client
        Remote(NodeId),              // Remote peer
        WebUI,                       // Web frontend
    }
-   
+
    pub enum RequestStatus {
        Pending,
        InProgress,
@@ -912,7 +882,7 @@
        Failed(String),
        Timeout,
    }
-   
+
    pub struct TokenUsage {
        pub prompt_tokens: u32,
        pub completion_tokens: u32,
@@ -933,11 +903,11 @@
        pub backoff_multiplier: f32, // Default: 2.0
        pub max_timeout: Duration,   // Default: 120s
    }
-   
+
    pub struct RetryManager {
        config: RetryConfig,
    }
-   
+
    impl RetryManager {
        pub async fn execute_with_retry<F, T>(&self, operation: F) -> Result<T>
        where
@@ -953,7 +923,7 @@
    - Per-provider retry configuration
    - **Testing**: Retry behavior, backoff timing, circuit breaker logic
 
-### 5.2 HTTP Proxy Implementation  
+### 5.2 HTTP Proxy Implementation
 **Objective**: Transparent HTTP proxying over P2P connections
 
 **Tasks:**
@@ -963,7 +933,7 @@
    pub struct HttpProxy {
        p2p_node: Arc<P2PNode>,
    }
-   
+
    impl HttpProxy {
        pub async fn proxy_request(&self, target: NodeId, request: hyper::Request<hyper::body::Incoming>) -> Result<hyper::Response<hyper::body::Incoming>> {
            // 1. Open P2P stream to target node
@@ -971,7 +941,7 @@
            // 3. Read HTTP response from stream
            // 4. Return response to client
        }
-       
+
        pub async fn handle_incoming_proxy(&self, stream: impl AsyncRead + AsyncWrite + Unpin) -> Result<()> {
            // 1. Read HTTP request from P2P stream
            // 2. Forward to local provider
@@ -991,13 +961,13 @@
        trusted_peers: HashSet<NodeId>,
        rate_limiter: RateLimiter,
    }
-   
+
    impl RequestAuthenticator {
        pub fn authenticate_peer(&self, peer_id: NodeId) -> Result<()> {
            // Verify peer is in trusted list
            // Check rate limits
        }
-       
+
        pub fn authorize_request(&self, peer_id: NodeId, request: &ChatCompletionRequest) -> Result<()> {
            // Check model access permissions
            // Validate request parameters
@@ -1019,23 +989,23 @@
    ```rust
    // crates/cli/src/main.rs
    use clap::{Parser, Subcommand};
-   
+
    #[derive(Parser)]
    #[command(name = "gate")]
    #[command(about = "Private Gate P2P AI Compute Network")]
    struct Cli {
        #[command(subcommand)]
        command: Commands,
-       
+
        /// Config file path
        #[arg(long, global = true)]
        config: Option<PathBuf>,
-       
+
        /// Log level
        #[arg(long, global = true, value_enum)]
        log_level: Option<LogLevel>,
    }
-   
+
    #[derive(Subcommand)]
    enum Commands {
        /// Start the daemon
@@ -1043,43 +1013,43 @@
            /// Run in background
            #[arg(long)]
            daemon: bool,
-           
+
            /// Bind to specific interface
            #[arg(long)]
            bind: Option<IpAddr>,
        },
-       
+
        /// Stop the daemon
        Stop,
-       
+
        /// Show daemon status
        Status,
-       
+
        /// Peer management
        Peers {
            #[command(subcommand)]
            command: PeerCommands,
        },
-       
+
        /// Configuration management
        Config {
            #[command(subcommand)]
            command: ConfigCommands,
        },
-       
+
        /// Interactive setup wizard
        Setup,
-       
+
        /// View logs
        Logs {
            /// Follow log output
            #[arg(short, long)]
            follow: bool,
-           
+
            /// Log level filter
            #[arg(long)]
            level: Option<LogLevel>,
-           
+
            /// Number of lines to show
            #[arg(short, long)]
            lines: Option<usize>,
@@ -1100,46 +1070,46 @@
        Add {
            /// Peer node ID (public key)
            node_id: String,
-           
+
            /// Peer address (optional)
            #[arg(long)]
            address: Option<SocketAddr>,
-           
+
            /// Mark as trusted
            #[arg(long)]
            trusted: bool,
        },
-       
+
        /// Remove a peer
        Remove {
            /// Peer node ID
            node_id: String,
        },
-       
+
        /// List all peers
        List {
            /// Show only connected peers
            #[arg(long)]
            connected: bool,
-           
+
            /// Output format
            #[arg(long, value_enum)]
            format: Option<OutputFormat>,
        },
-       
+
        /// Show detailed peer information
        Info {
            /// Peer node ID
            node_id: String,
        },
-       
+
        /// Test connection to peer
        Test {
            /// Peer node ID
            node_id: String,
        },
    }
-   
+
    #[derive(Clone, ValueEnum)]
    enum OutputFormat {
        Table,
@@ -1158,7 +1128,7 @@
    pub struct SetupWizard {
        config: Configuration,
    }
-   
+
    impl SetupWizard {
        pub async fn run(&mut self) -> Result<Configuration> {
            self.welcome_screen()?;
@@ -1170,16 +1140,16 @@
            self.save_configuration().await?;
            Ok(self.config.clone())
        }
-       
+
        async fn setup_identity(&mut self) -> Result<()> {
            println!("Setting up node identity...");
-           
+
            let choice = Select::new("Choose identity option:")
                .item("Generate new identity (recommended)", "generate")
                .item("Import existing identity", "import")
                .item("Use existing identity file", "existing")
                .prompt()?;
-               
+
            match choice {
                "generate" => {
                    let identity = Identity::generate();
@@ -1195,16 +1165,16 @@
                    // Check for existing identity file
                },
            }
-           
+
            Ok(())
        }
-       
+
        async fn discover_providers(&mut self) -> Result<()> {
            println!("Discovering local AI providers...");
-           
+
            // Scan common ports for Ollama, LM Studio
            let discovered = self.scan_for_providers().await?;
-           
+
            if discovered.is_empty() {
                println!("No providers found. You can add them manually later.");
            } else {
@@ -1212,14 +1182,14 @@
                for provider in &discovered {
                    println!("  - {} at {} ({} models)", provider.name, provider.url, provider.models.len());
                }
-               
+
                let selected = MultiSelect::new("Select providers to enable:")
                    .items(&discovered)
                    .prompt()?;
-                   
+
                self.config.providers = selected;
            }
-           
+
            Ok(())
        }
    }
@@ -1252,18 +1222,18 @@
        zone_id: String,
        base_domain: String, // "private.hellas.ai"
    }
-   
+
    impl CloudflareManager {
        pub async fn provision_subdomain(&self, node_id: &NodeId) -> Result<String> {
            // 1. Generate subdomain: {node_id_hex}.private.hellas.ai
            // 2. Create A/AAAA records pointing to relay IPs
            // 3. Return full domain name
        }
-       
+
        pub async fn create_dns_challenge(&self, domain: &str, token: &str) -> Result<()> {
            // Create TXT record for Let's Encrypt DNS challenge
        }
-       
+
        pub async fn cleanup_subdomain(&self, domain: &str) -> Result<()> {
            // Remove DNS records when node disconnects
        }
@@ -1282,7 +1252,7 @@
        dns_manager: Arc<CloudflareManager>,
        cert_storage: Arc<CertificateStorage>,
    }
-   
+
    impl AcmeManager {
        pub async fn request_certificate(&self, domain: &str, node_id: NodeId) -> Result<Certificate> {
            // 1. Create ACME account if needed
@@ -1292,17 +1262,17 @@
            // 5. Store certificate for node
            // 6. Return certificate for node to use
        }
-       
+
        pub async fn validate_dns_propagation(&self, domain: &str, challenge_token: &str) -> Result<()> {
            // Query multiple DNS servers to confirm challenge record exists
            // Wait for propagation with exponential backoff
        }
-       
+
        pub async fn renew_certificate(&self, domain: &str) -> Result<Certificate> {
            // Automatic certificate renewal before expiry
        }
    }
-   
+
    pub struct Certificate {
        pub domain: String,
        pub certificate_pem: String,
@@ -1329,7 +1299,7 @@
        node_registry: Arc<NodeRegistry>,
        active_connections: Arc<RwLock<HashMap<ConnectionId, ConnectionInfo>>>,
    }
-   
+
    impl SniProxy {
        pub async fn handle_https_connection(&self, stream: TcpStream) -> Result<()> {
            // 1. Extract SNI from TLS ClientHello
@@ -1337,16 +1307,16 @@
            // 3. Open P2P stream to target node
            // 4. Proxy raw TCP traffic bidirectionally
        }
-       
+
        async fn extract_sni(&self, stream: &mut TcpStream) -> Result<String> {
            // Parse TLS ClientHello to extract SNI extension
        }
-       
+
        async fn proxy_bidirectional(&self, client_stream: TcpStream, p2p_stream: impl AsyncRead + AsyncWrite) -> Result<()> {
            // Proxy data in both directions until connection closes
        }
    }
-   
+
    pub struct NodeRegistry {
        nodes: RwLock<HashMap<String, NodeId>>, // domain -> node_id
    }
@@ -1363,20 +1333,20 @@
        relay_nodes: Vec<RelayNode>,
        health_checker: HealthChecker,
    }
-   
+
    pub struct RelayNode {
        pub id: String,
        pub addresses: Vec<SocketAddr>,
        pub status: RelayStatus,
        pub load: f32,
    }
-   
+
    pub enum RelayStatus {
        Healthy,
        Degraded,
        Unhealthy,
    }
-   
+
    impl RelayLoadBalancer {
        pub fn select_relay(&self, client_ip: IpAddr) -> Result<&RelayNode> {
            // Geographic/network proximity selection
@@ -1403,14 +1373,14 @@
    #[cfg(test)]
    mod tests {
        use super::*;
-       
+
        #[test]
        fn test_identity_generation() {
            let identity = Identity::generate();
            assert_eq!(identity.public_key.as_bytes().len(), 32);
            assert_eq!(identity.private_key.as_bytes().len(), 32);
        }
-       
+
        #[test]
        fn test_signing_and_verification() {
            let identity = Identity::generate();
@@ -1418,12 +1388,12 @@
            let signature = identity.sign(message);
            assert!(Identity::verify(&identity.public_key, message, &signature));
        }
-       
+
        #[tokio::test]
        async fn test_p2p_handshake() {
            let node1 = create_test_node().await;
            let node2 = create_test_node().await;
-           
+
            let capabilities = node1.handshake_with_peer(node2.node_id()).await.unwrap();
            assert!(capabilities.supported_models.len() > 0);
        }
@@ -1438,14 +1408,14 @@
        // Set up two nodes with mock providers
        let node1 = setup_test_node_with_provider().await;
        let node2 = setup_test_node().await;
-       
+
        // Connect nodes
        node2.connect_to_peer(node1.node_id()).await.unwrap();
-       
+
        // Send inference request from node2 to node1
        let request = ChatCompletionRequest { /* ... */ };
        let response = node2.send_inference_request(node1.node_id(), request).await.unwrap();
-       
+
        assert_eq!(response.model, "test-model");
        assert!(response.choices.len() > 0);
    }
@@ -1455,24 +1425,24 @@
    ```rust
    // tests/e2e/web_interface.rs
    use playwright::Playwright;
-   
+
    #[tokio::test]
    async fn test_web_interface_setup_wizard() {
        // Start daemon in test mode
        let daemon = start_test_daemon().await;
-       
+
        // Open browser and navigate to setup wizard
        let playwright = Playwright::initialize().await.unwrap();
        let browser = playwright.chromium().launcher().headless(true).launch().await.unwrap();
        let page = browser.new_page().await.unwrap();
-       
+
        page.goto("http://localhost:8145/setup").await.unwrap();
-       
+
        // Complete setup wizard
        page.click("button:text('Generate new identity')").await.unwrap();
        page.click("button:text('Next')").await.unwrap();
        // ... test each step
-       
+
        // Verify configuration was saved
        let config = daemon.get_config().await.unwrap();
        assert!(config.node.identity.is_some());
@@ -1483,11 +1453,11 @@
    ```rust
    // benches/throughput.rs
    use criterion::{criterion_group, criterion_main, Criterion};
-   
+
    fn benchmark_request_routing(c: &mut Criterion) {
        let rt = tokio::runtime::Runtime::new().unwrap();
        let router = rt.block_on(setup_test_router());
-       
+
        c.bench_function("route_request", |b| {
            b.to_async(&rt).iter(|| async {
                let request = create_test_request();
@@ -1495,7 +1465,7 @@
            })
        });
    }
-   
+
    criterion_group!(benches, benchmark_request_routing);
    criterion_main!(benches);
    ```
@@ -1514,35 +1484,35 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         rust: [stable, beta]
     runs-on: ${{ matrix.os }}
-    
+
     steps:
     - uses: actions/checkout@v4
     - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ matrix.rust }}
         components: clippy, rustfmt
-        
+
     - name: Cache cargo registry
       uses: actions/cache@v3
       with:
         path: ~/.cargo/registry
         key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-        
+
     - name: Check formatting
       run: cargo fmt --all -- --check
-      
+
     - name: Run clippy
       run: cargo clippy --workspace --all-targets -- -D warnings
-      
+
     - name: Run unit tests
       run: cargo test --workspace
-      
+
     - name: Run integration tests
       run: cargo test --test '*' --workspace
-      
+
     - name: Build all binaries
       run: cargo build --workspace --release
-      
+
     - name: Run end-to-end tests
       if: matrix.os == 'ubuntu-latest' && matrix.rust == 'stable'
       run: cargo test --test e2e --workspace
@@ -1557,7 +1527,7 @@ jobs:
 - Cryptographic foundations
 - Basic configuration management
 
-**Phase 2: P2P Networking** 
+**Phase 2: P2P Networking**
 - Iroh integration and peer discovery
 - Message protocol implementation
 - Connection management and keep-alive

@@ -25,7 +25,13 @@ cargo check --workspace       # Check all crates compile
 
 ## Project Status
 
-Currently in documentation-only phase. See `docs/META.md` for development workflow and contribution guidelines.
+**Phase 1: Foundation** - In Progress
+- ✅ **P2P Networking**: Basic peer-to-peer communication using Iroh (see `crates/p2p/`)
+- 🚧 **Core Types**: Message protocols and data structures
+- ⏳ **HTTP API**: OpenAI-compatible endpoints
+- ⏳ **Web Frontend**: Management interface
+
+See `docs/META.md` for development workflow and `docs/PLAN.md` for detailed roadmap.
 
 ## Documentation
 

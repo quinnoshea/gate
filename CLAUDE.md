@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Documentation Structure
 
 1. **docs/OVERVIEW.md** - What Gate is and business context
-2. **docs/DESIGN.md** - Technical architecture and system design  
+2. **docs/DESIGN.md** - Technical architecture and system design
 3. **docs/PLAN.md** - Implementation roadmap with concrete next steps
 
 ### For Code Agents:

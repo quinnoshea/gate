@@ -13,7 +13,7 @@ Gate is a lightweight daemon that runs locally on users' machines, providing sec
 The key selling point of Private Gate is **truly confidential, end-to-end access to your own (or trusted) compute resources**. Unlike traditional cloud AI services where your data passes through third-party servers, Gate ensures that:
 
 - Your requests are encrypted end-to-end
-- Only you control who can access your compute resources  
+- Only you control who can access your compute resources
 - Your private keys never leave your machine
 - No intermediary can inspect or log your AI interactions
 
@@ -81,7 +81,7 @@ Gate consists of several integrated components:
 - **Control protocol**: JSON-RPC interface for programmatic management
 
 ### Supporting Infrastructure
-- **Relay servers**: DNS and HTTPS proxying infrastructure  
+- **Relay servers**: DNS and HTTPS proxying infrastructure
 - **Client libraries**: Reusable components for integration with other applications
 - **Configuration management**: JSON-based configuration with automatic updates
 
@@ -89,7 +89,7 @@ Gate consists of several integrated components:
 
 - **Networking**: Iroh library for peer-to-peer communication
 - **HTTP server**: Hyper with Tokio async runtime
-- **Data storage**: JSON files for configuration and state management  
+- **Data storage**: JSON files for configuration and state management
 - **RPC**: jsonrpsee for control port communication
 - **Error handling**: thiserror for libraries, anyhow for applications
 - **WASM compatibility**: Key components designed to work in browser/serverless environments
