@@ -361,6 +361,19 @@ Configuration changes automatically reload without daemon restart (where safe). 
 - **Memory**: Long-running daemon stability
 - **Network**: P2P connection scaling
 
+## Development Guidelines
+
+### Cargo Workspace Management
+- **Shared Dependencies**: All common dependencies defined in `[workspace.dependencies]`
+- **Inheritance**: Sub-crates use `dependency.workspace = true` to inherit versions
+- **Minimal Dependencies**: Only add dependencies when actually needed, not speculatively
+- **Workspace Configuration**: Sub-crates inherit package metadata, lints, and configuration from workspace
+
+### Implementation Philosophy
+- **Minimal, Focused Implementation**: Only implement exactly what is requested
+- **No Speculative Features**: Don't add "helpful" additions or conveniences not asked for
+- **Dependency Hygiene**: Add dependencies incrementally as features require them
+
 ## Development Phases
 
 Development follows a "fast as we can correctly" approach with AI assistance, prioritizing correctness over speed.

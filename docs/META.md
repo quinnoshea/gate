@@ -63,7 +63,7 @@ The `docs/` directory contains the authoritative specification for Gate. **Code 
 ### For LLMs/AI Assistants:
 1. **Always read this file first** to understand project context and documentation workflow
 2. **Read OVERVIEW.md** for business context and high-level architecture
-3. **Consult DESIGN.md** for technical decisions and component details  
+3. **MUST read DESIGN.md** before writing any code - contains critical development guidelines and architecture decisions
 4. **Reference PLAN.md** for implementation tasks and current progress
 5. **Update documentation proactively** when making any technical decisions
 6. **Maintain consistency** between all documentation files

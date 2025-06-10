@@ -1,51 +1,27 @@
-# Gate - P2P AI Compute Network
+# Gate - Local LLM Gateway
 
-A peer-to-peer AI compute network providing secure, private access to distributed AI inference resources.
+Secure peer-to-peer LLM inference with end-to-end encryption and zero data exposure.
 
 ## Quick Start
 
-### Prerequisites
-
-- [Nix](https://nixos.org/download.html) with flakes enabled
-- Git
-
 ### Development Setup
 
-1. Clone and enter the repository:
+1. Enter the development environment:
 ```bash
-git clone <repository-url>
-cd private-gate
+nix develop  # or direnv allow
 ```
 
-2. Enter the development environment:
-```bash
-nix develop
-```
-
-This provides a consistent Rust toolchain (nightly-2025-06-10) with all required tools.
+Otherwise use rustup - the `rust-toolchain.toml` file will configure the correct toolchain.
 
 ### Development Commands
 
 ```bash
-# Build the project
-cargo build
-
-# Run tests
-cargo test
-
-# Check code quality
-cargo clippy
-
-# Format code
-cargo fmt
-
-# Check all crates compile
-cargo check --workspace
+cargo build                    # Build the project
+cargo test                     # Run tests
+cargo clippy                   # Check code quality
+cargo fmt                      # Format code
+cargo check --workspace       # Check all crates compile
 ```
-
-### Non-Nix Users
-
-If you prefer using rustup directly, the `rust-toolchain.toml` file will automatically configure the same toolchain version.
 
 ## Project Status
 
