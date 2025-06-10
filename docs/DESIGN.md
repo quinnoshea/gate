@@ -27,42 +27,70 @@ The main library that coordinates all system functionality. Can be embedded in o
 - `config_manager.rs` - Configuration loading and validation ([PLAN.md#configuration-management](PLAN.md#configuration-management))
 
 
-### P2P Networking (`crates/p2p/`) ✅ **IMPLEMENTED**
-Handles all peer-to-peer communication using Iroh.
+### P2P Networking (`crates/p2p/`) ✅ **FULLY IMPLEMENTED**
+Handles all peer-to-peer communication using Iroh with complete multi-stream protocol.
 
 **Current Implementation:**
 - **Transport**: Iroh QUIC streams for encrypted communication ✅
 - **Protocol Negotiation**: Custom ALPN "gate/1.0" for Gate protocol ✅
-- **Stream Multiplexing**: Bidirectional streams over QUIC connections ✅
+- **Multi-Stream Architecture**: Control + typed data streams ✅
+- **Control Protocol**: Handshake, capabilities, stream coordination ✅
+- **Inference Protocol**: JSON request/response for AI operations ✅
+- **SNI Proxy Protocol**: Raw TLS bytes for relay functionality ✅
+- **Stream Management**: Integrated lifecycle and correlation ✅
 - **Node Discovery**: Automatic via Iroh's built-in mechanisms ✅
-- **Connection Management**: Connection pooling and lifecycle management ✅
+- **Connection Management**: Per-peer state with stream multiplexing ✅
 
-**Implemented API:**
+**Public API (High-Level):**
 ```rust
-// crates/p2p/src/node.rs - IMPLEMENTED
-pub struct P2PNode {
-    endpoint: Endpoint,
-    node_id: NodeId,
-    connections: Arc<RwLock<HashMap<NodeId, Connection>>>,
-}
-
+// crates/p2p/src/node.rs - FULLY IMPLEMENTED
 impl P2PNode {
+    // Connection management
     pub async fn new() -> Result<Self>;
     pub async fn connect_to_peer(&self, addr: NodeAddr) -> Result<()>;
-    pub async fn send_message(&self, peer_id: NodeId, message: &[u8]) -> Result<()>;
+    pub async fn connected_peers(&self) -> Vec<NodeId>;
     pub fn node_id(&self) -> NodeId;
     pub async fn node_addr(&self) -> Result<NodeAddr>;
-    pub async fn start_listening(&self) -> Result<()>;
-    pub async fn connected_peers(&self) -> Vec<NodeId>;
+
+    // High-level inference API
+    pub async fn send_chat_completion(&self, peer_id: NodeId, request: ChatCompletionRequest) -> Result<ChatCompletionResponse>;
+    pub async fn list_peer_models(&self, peer_id: NodeId) -> Result<Vec<ModelInfo>>;
+
+    // SNI proxy API
+    pub async fn open_sni_proxy(&self, peer_id: NodeId, domain: String) -> Result<SniProxyHandle>;
+
+    // Capabilities management
+    pub async fn update_capabilities(&self, capabilities: Capabilities);
+    pub async fn get_peer_capabilities(&self, peer_id: NodeId) -> Option<Capabilities>;
 }
 ```
 
-**Status**: Basic P2P foundation complete. See `crates/p2p/README.md` for detailed API documentation.
+**Internal Architecture:**
+```rust
+// Multi-stream protocol with integrated management
+pub struct PeerConnection {
+    connection: Connection,
+    control_sender: mpsc::Sender<ControlMessage>,
+    active_streams: HashMap<StreamId, ActiveStream>,
+    next_stream_id: StreamId,
+    peer_capabilities: Option<Capabilities>,
+}
 
-**Future Work**:
-- Structured message protocol (currently raw bytes)
-- Message routing and handlers
-- Request/response correlation
+pub struct ActiveStream {
+    stream_id: StreamId,
+    stream_type: StreamType, // HttpInference, SniProxy, etc.
+    send_stream: SendStream,
+    recv_stream: RecvStream,
+}
+```
+
+**Status**: Complete multi-stream P2P implementation ready for HTTP server integration.
+
+**Protocol Design**:
+- **Control Stream (ID 0)**: JSON messages for handshake, authentication, stream coordination
+- **Inference Streams**: JSON request/response envelopes for chat completions and model queries
+- **SNI Proxy Streams**: Raw TLS bytes for transparent HTTPS forwarding (relay functionality)
+- **Stream Lifecycle**: Automatic management, correlation, cleanup integrated in P2PNode
 
 ### RPC Interface (`crates/rpc/`)
 JSON-RPC interface for daemon control and monitoring.

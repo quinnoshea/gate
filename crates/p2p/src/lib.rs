@@ -1,10 +1,18 @@
 //! P2P networking for Gate using Iroh
 
 pub mod error;
+pub mod inference;
 pub mod node;
+pub mod protocol;
+pub mod sni_proxy;
 
 pub use error::P2PError;
-pub use node::P2PNode;
+pub use inference::{
+    ChatCompletionRequest, ChatCompletionResponse, InferenceRequest, InferenceResponse,
+};
+pub use node::{P2PNode, SniProxyHandle};
+pub use protocol::{Capabilities, ControlMessage, ControlPayload, ModelInfo, StreamId, StreamType};
+pub use sni_proxy::{SniProxyConfig, SniProxyStats, SniProxyStream};
 
 pub type Result<T> = std::result::Result<T, P2PError>;
 

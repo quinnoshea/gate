@@ -99,9 +99,10 @@ The `docs/` directory contains the authoritative specification for Gate. **Code 
 2. **Update docs first**: If your approach differs from documented plan, update DESIGN.md
 3. **Implement**: Write code following the documented interface/structure
 4. **Test**: Ensure tests pass (every task includes testing requirements)
-5. **Mark complete**: Check off task in PLAN.md (`- [x]`)
-6. **Update docs**: If implementation revealed better approaches, update affected docs
-7. **Repeat**: Move to next unchecked task
+5. **Run pre-commit hooks**: `cargo fmt --all && cargo clippy --workspace --all-targets`
+6. **Mark complete**: Check off task in PLAN.md (`- [x]`)
+7. **Update docs**: If implementation revealed better approaches, update affected docs
+8. **Repeat**: Move to next unchecked task
 
 **Key Principle**: Never let code diverge from documentation - update docs proactively to match reality.
 
@@ -137,7 +138,8 @@ The `docs/` directory contains the authoritative specification for Gate. **Code 
 2. **During implementation**: Follow documented architecture and interfaces
 3. **After completion**: Update PLAN.md progress and any affected future tasks
 4. **When blocked**: Document the issue and potential solutions in relevant files
-5. **Before commits**: Ensure all documentation accurately reflects your changes
+5. **Before commits**: Run pre-commit hooks (`cargo fmt --all && cargo clippy --workspace --all-targets`)
+6. **Before commits**: Ensure all documentation accurately reflects your changes
 
 ---
 

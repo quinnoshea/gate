@@ -24,8 +24,12 @@ tracing = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 anyhow = "1.0"
 thiserror = "1.0"
+rand = "0.8"
+hex = "0.4"
 
 [workspace.lints.clippy]
 all = "warn"
 pedantic = "warn"
 nursery = "warn"
+# Allow similar names in tests where ping/pong, etc. make sense
+similar_names = { level = "allow", priority = 1 }

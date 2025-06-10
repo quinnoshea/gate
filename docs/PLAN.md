@@ -160,134 +160,25 @@
 
 ## Phase 2: P2P Networking
 
-### 2.1 Iroh Integration and Connection Management ✅ **COMPLETED**
-**Objective**: Establish secure peer-to-peer communication foundation
+### 2.1 P2P Protocol Foundation ✅ **API COMPLETE**
+**Objective**: Multi-stream P2P architecture with high-level API
 
-**Tasks:**
-1. **Set up Iroh node and connection handling** ✅ **COMPLETED**
-   - [x] Iroh endpoint creation with custom ALPN protocol ("gate/1.0")
-   - [x] Connection pooling and lifecycle management
-   - [x] Automatic peer discovery via Iroh's built-in mechanisms
-   - [x] **Testing**: End-to-end connection establishment and message delivery verified
-   - [x] **Implementation**: See `crates/p2p/README.md` for complete API documentation
+**Completed:**
+- Multi-stream protocol design (control, inference, SNI proxy)
+- P2PNode with clean external API (`send_chat_completion`, `open_sni_proxy`, etc.)
+- Protocol message types and serialization
+- Connection management with per-peer state
 
-2. **Implement peer discovery and management** ✅ **COMPLETED**
-   - [x] Automatic peer discovery via Iroh's built-in mechanisms
-   - [x] Connection establishment and tracking
-   - [x] Connection status monitoring (connected/disconnected peers)
-   - [x] **Testing**: Verified with end-to-end connection tests
-   - [x] **Implementation**: Basic peer management implemented in `P2PNode`
-   - [ ] **Future**: Advanced peer metadata (trust levels, capabilities) - moved to Phase 3
+**Still TODO:**
+- [ ] **Actual stream implementation**: Control stream handshake, message sending/receiving
+- [ ] **Request correlation**: Match requests to responses across streams
+- [ ] **Error handling**: Stream failures, timeouts, retries
+- [ ] **Stream lifecycle**: Proper opening/closing of typed streams
 
-3. **Implement graceful shutdown functionality** ✅ **COMPLETED**
-   - [x] Cancellation token-based shutdown signaling using `tokio_util::sync::CancellationToken`
-   - [x] Close all active connections using Iroh's `connection.close()` method
-   - [x] Background task lifecycle management with timeout handling
-   - [x] Endpoint closure using `endpoint.close().await`
-   - [x] API methods: `shutdown()`, `shutdown_with_timeout()`, `is_shutting_down()`
-   - [x] **Testing**: Comprehensive shutdown tests (basic, with connections, timeout, post-shutdown operations)
-   - [x] **Implementation**: Added to `P2PNode` in `crates/p2p/src/node.rs`
-
-4. **Create message routing and handling**
-   ```rust
-   // crates/p2p/src/router.rs
-   pub trait MessageHandler: Send + Sync {
-       async fn handle_message(&self, from: NodeId, message: Message) -> Result<Option<Message>>;
-   }
-
-   pub struct MessageRouter {
-       handlers: HashMap<String, Arc<dyn MessageHandler>>,
-       pending_requests: Arc<RwLock<HashMap<MessageId, tokio::sync::oneshot::Sender<Message>>>>,
-   }
-
-   impl MessageRouter {
-       pub fn register_handler(&mut self, message_type: &str, handler: Arc<dyn MessageHandler>) { /* ... */ }
-       pub async fn route_message(&self, from: NodeId, message: Message) -> Result<()> { /* ... */ }
-       pub async fn send_request(&self, target: NodeId, request: Message) -> Result<Message> { /* ... */ }
-   }
-   ```
-   - Request/response correlation using message IDs
-   - Timeout handling for unresponded requests
-   - Message deduplication and ordering
-   - **Testing**: Handler registration, request correlation, timeout behavior
-
-### 2.2 Protocol Implementation
-**Objective**: Implement handshake, capabilities, and keep-alive protocols
-
-**Tasks:**
-1. **Implement connection handshake protocol**
-   ```rust
-   // crates/p2p/src/handshake.rs
-   pub struct HandshakeHandler {
-       local_identity: Identity,
-       trusted_peers: HashSet<NodeId>,
-       capabilities: Capabilities,
-   }
-
-   impl HandshakeHandler {
-       pub async fn initiate_handshake(&self, target: NodeId) -> Result<Capabilities> {
-           // 1. Send handshake with our capabilities
-           // 2. Wait for handshake response
-           // 3. Verify peer is trusted
-           // 4. Return peer capabilities
-       }
-
-       pub async fn handle_handshake(&self, from: NodeId, handshake: HandshakeMessage) -> Result<HandshakeResponse> {
-           // 1. Verify peer is in trusted list
-           // 2. Validate protocol version compatibility
-           // 3. Return our capabilities or rejection
-       }
-   }
-   ```
-   - Protocol version negotiation
-   - Trust verification during handshake
-   - Capability exchange and storage
-   - **Testing**: Handshake success/failure scenarios, version compatibility
-
-2. **Implement capability discovery and advertising**
-   ```rust
-   // crates/p2p/src/capabilities.rs
-   #[derive(Debug, Clone, Serialize, Deserialize)]
-   pub struct Capabilities {
-       pub node_id: NodeId,
-       pub protocol_version: u8,
-       pub supported_models: Vec<ModelInfo>,
-       pub max_context_length: Option<u32>,
-       pub supports_streaming: bool,
-       pub load_factor: f32, // 0.0 = idle, 1.0 = overloaded
-       pub features: HashSet<String>, // "relay", "public-endpoint", etc.
-   }
-
-   #[derive(Debug, Clone, Serialize, Deserialize)]
-   pub struct ModelInfo {
-       pub name: String,
-       pub provider: String, // "ollama", "lmstudio"
-       pub context_length: u32,
-       pub capabilities: Vec<String>, // "chat", "completion", "embedding"
-   }
-   ```
-   - Periodic capability refresh from local providers
-   - Load factor calculation based on active requests
-   - Model availability caching and invalidation
-   - **Testing**: Capability refresh, load calculation, cache behavior
-
-3. **Add ping/pong keep-alive mechanism**
-   ```rust
-   // crates/p2p/src/keepalive.rs
-   pub struct KeepAliveManager {
-       ping_interval: Duration, // Default: 30 seconds
-       pong_timeout: Duration,  // Default: 10 seconds
-       max_missed_pongs: u32,   // Default: 3
-   }
-
-   impl KeepAliveManager {
-       pub async fn start_keepalive(&self, peer: NodeId) -> Result<()> {
-           // Send periodic pings, track pong responses
-           // Disconnect peer after max_missed_pongs
-       }
-
-       pub async fn handle_ping(&self, from: NodeId, nonce: u64) -> Result<()> {
-           // Respond with pong containing same nonce
+**Impact on later phases**:
+- HTTP server integrates with `P2PNode` high-level API instead of raw streams
+- Request routing simplified: `p2p_node.send_chat_completion(peer_id, request).await?`
+- Provider integration needs P2P capability updates
        }
    }
    ```
@@ -298,34 +189,41 @@
 
 ## Phase 3: HTTP API and Provider Integration
 
-### 3.1 HTTP Server Implementation
-**Objective**: OpenAI-compatible API server with streaming support
+### 3.1 HTTP Server Implementation **UPDATED FOR P2P API**
+**Objective**: OpenAI-compatible API server integrated with P2PNode
 
-**Tasks:**
-1. **Set up Axum HTTP server with OpenAI routes**
-   ```rust
-   // crates/daemon/src/http_server.rs
-   pub struct HttpServer {
-       router: Router,
-       provider_manager: Arc<ProviderManager>,
-       p2p_node: Arc<P2PNode>,
-       config: HttpConfig,
-   }
+**Updated approach**: HTTP server uses P2PNode high-level API for routing
+```rust
+// crates/daemon/src/http_server.rs
+pub struct HttpServer {
+    router: Router,
+    provider_manager: Arc<ProviderManager>,
+    p2p_node: Arc<P2PNode>, // ✅ Uses new high-level API
+    config: HttpConfig,
+}
 
-   pub async fn create_router() -> Router {
-       Router::new()
-           .route("/v1/chat/completions", post(chat_completions))
-           .route("/v1/models", get(list_models))
-           .route("/health", get(health_check))
-           .route("/metrics", get(prometheus_metrics))
-           .layer(cors_layer())
-           .layer(logging_layer())
-           .layer(rate_limiting_layer())
-   }
-   ```
-   - OpenAI-compatible endpoint implementations
-   - Request validation and error handling
-   - CORS support for web frontend
+// Updated request routing
+pub async fn chat_completions(
+    State(app_state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<ChatCompletionRequest>,
+) -> Result<Response, AppError> {
+    // Check for target peer header
+    if let Some(target_peer) = headers.get("X-Target-Node") {
+        let peer_id = parse_node_id(target_peer)?;
+        // ✅ Simple P2P call - complexity hidden
+        let response = app_state.p2p_node
+            .send_chat_completion(peer_id, request)
+            .await?;
+        return Ok(Json(response).into_response());
+    }
+
+    // Handle locally via provider manager
+    app_state.provider_manager.handle_chat_completion(request).await
+}
+```
+
+**Simplified by P2P refactor**: No manual stream management, just high-level calls
    - **Testing**: HTTP endpoint behavior, OpenAI compatibility, error responses
 
 2. **Implement chat completions endpoint**

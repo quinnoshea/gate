@@ -20,7 +20,9 @@
       "Bash(cargo search:*)",
       "Bash(cargo info:*)",
       "Bash(RUST_LOG=hellas_gate_p2p=debug cargo test --package hellas-gate-p2p -- --nocapture)",
-      "Bash(cargo clippy:*)"
+      "Bash(cargo clippy:*)",
+      "Bash(grep:*)",
+      "Bash(cargo build:*)"
     ],
     "deny": []
   }
