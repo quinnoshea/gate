@@ -9,6 +9,8 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
+serde = { workspace = true }
+hex = { workspace = true }
 
 [lints]
 workspace = true

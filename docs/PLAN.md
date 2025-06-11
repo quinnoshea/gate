@@ -160,20 +160,21 @@
 
 ## Phase 2: P2P Networking
 
-### 2.1 P2P Protocol Foundation ✅ **API COMPLETE**
+### 2.1 P2P Protocol Foundation 🔄 **MOSTLY COMPLETE**
 **Objective**: Multi-stream P2P architecture with high-level API
 
 **Completed:**
-- Multi-stream protocol design (control, inference, SNI proxy)
-- P2PNode with clean external API (`send_chat_completion`, `open_sni_proxy`, etc.)
-- Protocol message types and serialization
-- Connection management with per-peer state
+- ✅ Multi-stream protocol design (control, inference, SNI proxy)
+- ✅ P2PNode with external API (`send_chat_completion`, `open_sni_proxy`, etc.)
+- ✅ Protocol message types and serialization
+- ✅ Connection management with per-peer state
+- ✅ Stream lifecycle management (create, track, close)
 
 **Still TODO:**
-- [ ] **Actual stream implementation**: Control stream handshake, message sending/receiving
+- [ ] **Control stream handshake**: Initial peer authentication and capability exchange
+- [ ] **Message I/O**: Actually send/receive JSON over streams
 - [ ] **Request correlation**: Match requests to responses across streams
 - [ ] **Error handling**: Stream failures, timeouts, retries
-- [ ] **Stream lifecycle**: Proper opening/closing of typed streams
 
 **Impact on later phases**:
 - HTTP server integrates with `P2PNode` high-level API instead of raw streams

@@ -1,5 +1,9 @@
 //! Gate core types and utilities
 
+pub mod types;
+
+pub use types::{GateAddr, GateId};
+
 #[cfg(test)]
 mod tests {
     #[test]

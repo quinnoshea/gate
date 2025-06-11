@@ -27,19 +27,19 @@ The main library that coordinates all system functionality. Can be embedded in o
 - `config_manager.rs` - Configuration loading and validation ([PLAN.md#configuration-management](PLAN.md#configuration-management))
 
 
-### P2P Networking (`crates/p2p/`) ✅ **FULLY IMPLEMENTED**
-Handles all peer-to-peer communication using Iroh with complete multi-stream protocol.
+### P2P Networking (`crates/p2p/`) 🔄 **MOSTLY IMPLEMENTED**
+Handles all peer-to-peer communication using Iroh with multi-stream protocol.
 
 **Current Implementation:**
 - **Transport**: Iroh QUIC streams for encrypted communication ✅
 - **Protocol Negotiation**: Custom ALPN "gate/1.0" for Gate protocol ✅
 - **Multi-Stream Architecture**: Control + typed data streams ✅
-- **Control Protocol**: Handshake, capabilities, stream coordination ✅
-- **Inference Protocol**: JSON request/response for AI operations ✅
+- **Stream Management**: Lifecycle and active stream tracking ✅
 - **SNI Proxy Protocol**: Raw TLS bytes for relay functionality ✅
-- **Stream Management**: Integrated lifecycle and correlation ✅
 - **Node Discovery**: Automatic via Iroh's built-in mechanisms ✅
 - **Connection Management**: Per-peer state with stream multiplexing ✅
+- **Control Protocol**: Message types defined, handshake logic missing 🔄
+- **Inference Protocol**: JSON serialization, missing actual stream I/O 🔄
 
 **Public API (High-Level):**
 ```rust
@@ -84,7 +84,7 @@ pub struct ActiveStream {
 }
 ```
 
-**Status**: Complete multi-stream P2P implementation ready for HTTP server integration.
+**Status**: Multi-stream P2P implementation with missing control stream handshake and actual message I/O.
 
 **Protocol Design**:
 - **Control Stream (ID 0)**: JSON messages for handshake, authentication, stream coordination

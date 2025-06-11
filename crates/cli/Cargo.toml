@@ -1,0 +1,35 @@
+[package]
+name = "gate"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Gate CLI for P2P AI inference network"
+
+[[bin]]
+name = "gate"
+path = "src/main.rs"
+
+[dependencies]
+# Workspace dependencies
+hellas-gate-core = { path = "../core" }
+hellas-gate-p2p = { path = "../p2p" }
+hellas-gate-daemon = { path = "../daemon" }
+
+tokio = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = "1.0"
+anyhow = { workspace = true }
+
+# CLI dependencies
+clap = { version = "4.0", features = ["derive", "env"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+dirs = "5.0"
+
+
+[features]
+default = []
