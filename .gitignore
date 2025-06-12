@@ -1,5 +1,6 @@
 .direnv
 .envrc
+.state
 
 target/
 .env.local

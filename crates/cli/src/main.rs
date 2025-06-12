@@ -2,24 +2,29 @@
 
 mod commands;
 mod config;
+mod logging;
 
 use anyhow::Result;
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use commands::Commands;
-use tracing::{error, info};
+use tracing::{error, info, Level};
 
 #[derive(Parser)]
 #[command(name = "gate")]
 #[command(about = "A P2P AI inference network")]
 #[command(version)]
 struct Cli {
-    /// Enable verbose logging
-    #[arg(short, long, global = true)]
-    verbose: bool,
+    /// Set logging level
+    #[arg(short = 'l', long, global = true, default_value = "info")]
+    log_level: LogLevel,
 
-    /// Configuration file path
-    #[arg(short, long, global = true)]
-    config: Option<std::path::PathBuf>,
+    /// Data directory for all component data (configs, identity, peer info, logs, etc.)
+    #[arg(short = 'd', long, global = true)]
+    data_dir: Option<std::path::PathBuf>,
+
+    /// Timeout for operations in seconds (0 = no timeout)
+    #[arg(short = 't', long, global = true, default_value = "5")]
+    timeout: u64,
 
     #[command(subcommand)]
     command: Commands,
@@ -29,31 +34,66 @@ struct Cli {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // Initialize logging
-    init_logging(cli.verbose);
+    // Initialize logging with component name
+    let component = match &cli.command {
+        Commands::Daemon { .. } => "daemon",
+        Commands::Relay { .. } => "relay",
+        _ => "cli",
+    };
+    logging::init_logging(cli.log_level.into(), cli.data_dir.clone(), component)?;
 
     info!("Starting Gate CLI");
 
-    // Execute command
-    if let Err(e) = cli.command.execute(cli.config).await {
-        error!("Command failed: {e}");
-        std::process::exit(1);
+    // Execute command with optional timeout
+    if cli.timeout == 0 {
+        // No timeout - run indefinitely
+        match cli.command.execute(cli.data_dir).await {
+            Ok(()) => {
+                info!("Command completed successfully");
+            }
+            Err(e) => {
+                error!("Command failed: {e}");
+                std::process::exit(1);
+            }
+        }
+    } else {
+        // Execute command with timeout
+        let timeout_duration = std::time::Duration::from_secs(cli.timeout);
+        match tokio::time::timeout(timeout_duration, cli.command.execute(cli.data_dir)).await {
+            Ok(Ok(())) => {
+                info!("Command completed successfully");
+            }
+            Ok(Err(e)) => {
+                error!("Command failed: {e}");
+                std::process::exit(1);
+            }
+            Err(_) => {
+                error!("Command timed out after {} seconds", cli.timeout);
+                std::process::exit(1);
+            }
+        }
     }
 
     Ok(())
 }
 
-fn init_logging(verbose: bool) {
-    use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+#[derive(Clone, Debug, ValueEnum)]
+enum LogLevel {
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
+}
 
-    let level = if verbose { "debug" } else { "info" };
-
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                format!("gate={level},hellas_gate_daemon={level},hellas_gate_p2p={level}").into()
-            }),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
+impl From<LogLevel> for Level {
+    fn from(log_level: LogLevel) -> Self {
+        match log_level {
+            LogLevel::Error => Level::ERROR,
+            LogLevel::Warn => Level::WARN,
+            LogLevel::Info => Level::INFO,
+            LogLevel::Debug => Level::DEBUG,
+            LogLevel::Trace => Level::TRACE,
+        }
+    }
 }

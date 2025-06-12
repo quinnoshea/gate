@@ -3,9 +3,15 @@
 pub mod config;
 pub mod daemon;
 pub mod http;
+pub mod letsencrypt;
+pub mod selfsigned;
+pub mod tls;
+pub mod tls_bridge;
 pub mod upstream;
 
-pub use config::{DaemonConfig, HttpConfig, P2PConfig, UpstreamConfig};
+pub use config::{
+    DaemonConfig, HttpConfig, LetsEncryptConfig, P2PConfig, TlsConfig, UpstreamConfig,
+};
 pub use daemon::GateDaemon;
 pub use upstream::{InferenceRequest, UpstreamResponse};
 

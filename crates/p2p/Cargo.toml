@@ -21,6 +21,8 @@ thiserror.workspace = true
 rand.workspace = true
 hex.workspace = true
 uuid = { version = "1.0", features = ["v4"] }
+dashmap = "6.0"
+url = "2.5"
 
 hellas-gate-core = { path = "../core" }
 

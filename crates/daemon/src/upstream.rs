@@ -230,6 +230,7 @@ mod tests {
             default_url: "http://localhost:1234/v1".to_string(),
             timeout_secs: 30,
             api_key: None,
+            test_model: "test-model".to_string(),
         };
 
         let client = UpstreamClient::new(&config).unwrap();

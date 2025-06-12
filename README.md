@@ -1,37 +1,51 @@
-# Gate - Local LLM Gateway
+# Gate - P2P AI Inference Network
 
-Secure peer-to-peer LLM inference with end-to-end encryption and zero data exposure.
+Secure peer-to-peer AI inference with end-to-end encryption and zero data exposure.
 
 ## Quick Start
 
+### Installation
+```bash
+cargo build --release
+```
+
+### Basic Usage
+
+**Start Gate daemon** (the full P2P AI inference network):
+```bash
+gate daemon
+```
+
+**Connect to a peer** for inference:
+```bash
+gate p2p --peer <node_id>@<ip>:<port> inference --model gpt-4 --message "Hello"
+```
+
+**Generate default config**:
+```bash
+gate config --output gate.json
+```
+
+**For Relay**: See `crates/relay/README.md`
+
+### CLI Options
+- `-d, --data-dir <PATH>` - Data directory (configs, logs, identity)
+- `-l, --log-level <LEVEL>` - Logging level: error, warn, info, debug, trace
+- `-t, --timeout <SECS>` - Command timeout (0 = no timeout)
+
+### Logs
+Logs are stored in `.state/{daemon,relay,cli}/logs/YYYY-MM-DD`
+
+So, e.g .state/daemon/logs/2025-06-11
+
 ### Development Setup
 
-1. Enter the development environment:
 ```bash
-nix develop  # or direnv allow
+nix develop  # or direnv allow, or use rustup with rust-toolchain.toml
+cargo build
+cargo test
+cargo clippy
 ```
-
-Otherwise use rustup - the `rust-toolchain.toml` file will configure the correct toolchain.
-
-### Development Commands
-
-```bash
-cargo build                    # Build the project
-cargo test                     # Run tests
-cargo clippy                   # Check code quality
-cargo fmt                      # Format code
-cargo check --workspace       # Check all crates compile
-```
-
-## Project Status
-
-**Phase 1: Foundation** - In Progress
-- ✅ **P2P Networking**: Basic peer-to-peer communication using Iroh (see `crates/p2p/`)
-- 🚧 **Core Types**: Message protocols and data structures
-- ⏳ **HTTP API**: OpenAI-compatible endpoints
-- ⏳ **Web Frontend**: Management interface
-
-See `docs/META.md` for development workflow and `docs/PLAN.md` for detailed roadmap.
 
 ## Documentation
 

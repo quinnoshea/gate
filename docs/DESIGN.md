@@ -246,26 +246,42 @@ gate setup                                 # Interactive setup
 gate logs [--follow] [--level LEVEL]       # View logs
 ```
 
-### Relay Server (`crates/relay/`)
-Public HTTPS proxy for browser-compatible endpoints.
+### Relay Server (`crates/relay/`) ✅ **LIBRARY IMPLEMENTED**
+Public HTTPS proxy for browser-compatible endpoints, available as CLI subcommand.
 
-**Functionality:**
-- **DNS Management**: Provision subdomains via Cloudflare API
-- **Node-Relay Communication**: Control streams over Iroh for DNS challenge coordination
-- **TLS Proxying**: Route raw TLS bytes to nodes via separate Iroh streams
-- **Load Balancing**: Multiple relay instances with anycast IPs
+**Current Implementation Status:**
+- ✅ **SNI Extraction**: Parses TLS ClientHello to extract target node ID from domain
+- ✅ **Node Registry**: Tracks active nodes and domain mappings with automatic cleanup
+- 🔄 **DNS Management**: Cloudflare API integration implemented but not tested
+- ✅ **TLS Proxy Architecture**: Complete framework for bidirectional TLS forwarding
+- ✅ **CLI Integration**: `gate relay` command with local daemon discovery
+- ⚠️ **P2P Stream Forwarding**: Framework ready, actual byte forwarding not yet implemented
+- 🔄 **ACME Integration**: Infrastructure in place, Let's Encrypt automation pending
+- 🔄 **Load Balancing**: Multi-instance support designed but not implemented
 
-**Key components:**
-- `dns_manager.rs` - Cloudflare API integration
-- `relay_protocol.rs` - Node-relay control message handling
-- `tls_proxy.rs` - SNI-based TLS proxying
-- `node_registry.rs` - Track active nodes and their domains
+**Key Components Implemented:**
+- `lib.rs` - Public library interface for embedding
+- `relay.rs` - Main relay server coordination and peer management
+- `sni.rs` - TLS ClientHello parsing and SNI extraction
+- `tls_proxy.rs` - Proxy architecture with domain-to-node mapping
+- `node_registry.rs` - Node lifecycle management and health tracking
+- `dns.rs` - Cloudflare DNS management implementation (untested)
+- `error.rs` - Comprehensive error handling
 
-**Iroh Stream Multiplexing:**
-- Single Iroh connection per node-relay pair
-- Control stream for domain/DNS management
-- Multiple TLS proxy streams for browser connections
-- Stream type negotiation on establishment
+**CLI Usage:**
+```bash
+# Start relay server (discovers local daemon automatically)
+gate relay
+
+# Custom bind addresses
+gate relay --bind 0.0.0.0:8443 --p2p-bind 0.0.0.0:41146
+```
+
+**Testing Status:**
+- ✅ **Local Testing Ready**: Relay discovers and connects to local daemon
+- ✅ **SNI Parsing Verified**: Successfully extracts node IDs from `localhost.private.hellas.ai`
+- ✅ **Node Mapping Works**: Correctly routes domains to registered nodes
+- ⚠️ **P2P Forwarding**: Reaches forwarding step but not yet implemented
 
 ## Data Flow
 

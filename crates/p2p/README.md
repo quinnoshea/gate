@@ -1,194 +1,147 @@
 # hellas-gate-p2p
 
-P2P networking for Gate using [Iroh](https://iroh.computer/) with multi-stream protocol support.
+P2P networking for Gate using [Iroh](https://iroh.computer/) with control protocol and multiple stream types.
 
 ## Overview
 
-This crate provides a complete peer-to-peer networking system for the Gate network, featuring a multi-stream protocol architecture that supports different types of communication over a single connection. Built on Iroh's secure QUIC transport with automatic hole punching and relay fallback.
+This crate provides peer-to-peer networking for the Gate network with support for:
+- Control protocol for handshakes and coordination
+- Inference streams for AI operations
+- SNI proxy streams for HTTPS forwarding
+- DNS challenge coordination for ACME
+
+## Current Status
+
+**✅ Implemented:**
+- `P2PSession` with endpoint management and peer actors
+- Control protocol with capability negotiation
+- Inference and SNI proxy protocol support
+- DNS challenge request/response messages
+- Stream management and bidirectional communication
+
+**🔄 In Progress:**
+- External SNI stream management (moved to applications)
+- Response correlation and timeout handling
 
 ## Architecture
 
-### Multi-Stream Protocol
+### Core Components
 
-Gate uses a sophisticated multi-stream protocol over each P2P connection:
+- **P2PSession**: Main entry point, manages multiple peer connections
+- **PeerActor**: Handles individual peer connections with control streams
+- **Control Protocol**: JSON messages for handshakes, capabilities, and coordination
+- **Stream Types**: Different protocols (inference, SNI proxy) over separate streams
 
-- **Control Stream (ID 0)**: JSON messages for handshake, authentication, and stream coordination
-- **Inference Streams**: JSON request/response envelopes for AI operations (chat completions, model queries)
-- **SNI Proxy Streams**: Raw TLS bytes for transparent HTTPS forwarding (relay functionality)
-
-### High-Level API
-
-The `P2PNode` provides a clean API that hides all stream management complexity:
+### Session Builder
 
 ```rust
-use hellas_gate_p2p::{P2PNode, ChatCompletionRequest, Result};
+use hellas_gate_p2p::P2PSession;
 
-// Create and connect
-let node = P2PNode::new().await?;
-node.connect_to_peer(peer_addr).await?;
+// Daemon session (handles inference)
+let session = P2PSession::builder()
+    .with_port(31145)
+    .with_inference()
+    .with_private_key(&identity)
+    .build().await?;
 
-// High-level inference operations
-let response = node.send_chat_completion(peer_id, request).await?;
-let models = node.list_peer_models(peer_id).await?;
+// Relay session (handles SNI proxy and DNS challenges)
+let session = P2PSession::builder()
+    .with_port(31145)
+    .with_sni_proxy()
+    .with_dns_challenge()
+    .with_dns_challenge_handler(cloudflare_handler)
+    .build().await?;
+```
 
-// SNI proxy for relay functionality
-let proxy_handle = node.open_sni_proxy(peer_id, "example.com".to_string()).await?;
+### Control Protocol
 
-// Capability management
-node.update_capabilities(capabilities).await;
-let peer_caps = node.get_peer_capabilities(peer_id).await;
+Messages exchanged over control streams:
+- `Handshake` / `HandshakeResponse` - Capability negotiation
+- `DnsChallengeCreate` / `DnsChallengeCleanup` - ACME DNS challenges
+- `DnsChallengeResponse` - Challenge operation results
+- `Ping` / `Pong` - Keep-alive
+
+### DNS Challenge Integration
+
+The P2P crate provides the `DnsChallengeHandler` trait for external DNS providers:
+
+```rust
+use hellas_gate_p2p::DnsChallengeHandler;
+
+impl DnsChallengeHandler for MyDnsProvider {
+    async fn handle_dns_challenge_create(&self, domain: &str, txt_value: &str) -> Result<String, String>;
+    async fn handle_dns_challenge_cleanup(&self, domain: &str) -> Result<(), String>;
+}
 ```
 
 ## API Reference
 
-### P2PNode
+### P2PSession
 
 **Connection Management:**
-- `new()` - Create a new P2P node with auto-generated capabilities
-- `node_id()` - Get this node's unique identifier (Ed25519 public key)
-- `node_addr()` - Get this node's address for others to connect to
-- `connect_to_peer(addr)` - Connect to a remote peer with stream management
-- `connected_peers()` - List currently connected peer IDs
-- `shutdown()` / `shutdown_with_timeout()` - Graceful shutdown with stream cleanup
+- `add_peer(peer_addr)` - Connect to a peer with persistent actor
+- `list_peers()` - Get connected peer IDs
+- `node_addr()` - Get this node's address
 
-**High-Level Inference API:**
-- `send_chat_completion(peer_id, request)` - Send chat completion request to peer
-- `list_peer_models(peer_id)` - Get available models from peer
-- `get_peer_capabilities(peer_id)` - Get peer's current capabilities
+**DNS Challenge API:**
+- `request_dns_challenge_create(peer_id, domain, txt_value)` - Request DNS challenge
+- `request_dns_challenge_cleanup(peer_id, domain)` - Request cleanup
 
-**SNI Proxy API:**
-- `open_sni_proxy(peer_id, domain)` - Open SNI proxy stream for domain
+**Protocol Handles:**
+- `take_inference_handle()` - Get handle for incoming inference requests
+- `take_sni_proxy_handle()` - Get handle for SNI proxy streams
 
-**Capabilities Management:**
-- `update_capabilities(capabilities)` - Update local capabilities (called by daemon)
+## Usage
 
-### Protocol Types
+### Daemon Example
 
-**Control Messages:**
 ```rust
-use hellas_gate_p2p::{ControlMessage, ControlPayload, Capabilities};
+// Create daemon session
+let mut session = P2PSession::builder()
+    .with_inference()
+    .with_private_key(&daemon_key)
+    .build().await?;
 
-// Handshake, stream requests, ping/pong, errors
-let message = ControlMessage::handshake(node_id, capabilities);
-let stream_request = ControlMessage::open_stream(stream_id, StreamType::HttpInference);
+// Handle inference requests
+let mut inference_handle = session.take_inference_handle().unwrap();
+tokio::spawn(async move {
+    while let Some(request) = inference_handle.next().await {
+        // Process inference request
+    }
+});
+
+// Connect to relay
+let relay_addr = "...".parse()?;
+session.add_peer(relay_addr).await?;
 ```
 
-**Inference Protocol:**
+### Relay Example
+
 ```rust
-use hellas_gate_p2p::{InferenceRequest, InferenceResponse, ChatCompletionRequest};
+// Create relay session with DNS handler
+let session = P2PSession::builder()
+    .with_sni_proxy()
+    .with_dns_challenge()
+    .with_dns_challenge_handler(cloudflare_handler)
+    .build().await?;
 
-// OpenAI-compatible requests with correlation IDs
-let request = InferenceRequest::chat_completion(request_id, chat_request);
-let response = InferenceResponse::chat_completion(request_id, chat_response);
-```
-
-**SNI Proxy:**
-```rust
-use hellas_gate_p2p::{SniProxyStream, SniProxyConfig};
-
-// Transparent TLS byte forwarding
-let proxy = SniProxyStream::new(stream_id, peer_id);
-proxy.configure(SniProxyConfig { domain: "example.com".to_string(), .. });
-proxy.handle_stream(stream1, stream2).await?; // Bidirectional copy
-```
-
-## Protocol Flow
-
-1. **Connection Establishment**: Iroh QUIC connection with "gate/1.0" ALPN
-2. **Control Stream Setup**: Stream ID 0 opened automatically for coordination
-3. **Handshake Exchange**: Capabilities and trust verification
-4. **Typed Stream Requests**: Open inference/SNI proxy streams via control messages
-5. **Data Exchange**: Protocol-specific communication on each stream
-6. **Keep-Alive**: Ping/pong on control stream maintains connection health
-
-## Implementation Status
-
-**✅ Completed:**
-- Multi-stream protocol design and message types
-- P2PNode with clean high-level API
-- Control, inference, and SNI proxy protocol definitions
-- Connection management with per-peer state
-- Stream lifecycle types and coordination messages
-- Comprehensive protocol message serialization
-- Integration-ready API for HTTP server
-
-**🔄 Still TODO:**
-- Actual bidirectional stream communication implementation
-- Control stream handshake and message exchange
-- Request/response correlation across streams
-- Stream opening/closing coordination
-- Error handling and timeout management
-
-## Testing
-
-```bash
-# Run all tests
-cargo test --package hellas-gate-p2p
-
-# Run with debug logging
-RUST_LOG=hellas_gate_p2p=debug cargo test --package hellas-gate-p2p -- --nocapture
-
-# Test specific protocols
-cargo test --package hellas-gate-p2p inference::tests
-cargo test --package hellas-gate-p2p sni_proxy::tests
-cargo test --package hellas-gate-p2p protocol::tests
-```
-
-### Test Coverage
-
-**✅ Protocol Types:**
-- Control message serialization/deserialization
-- Inference request/response structures
-- SNI proxy configuration and statistics
-- Stream type negotiation
-
-**✅ P2P Foundation:**
-- Node creation and connection establishment
-- Connection tracking and peer management
-- Graceful shutdown with cleanup
-- Connection lifecycle and error scenarios
-
-**🔄 Integration Tests Needed:**
-- End-to-end multi-stream communication
-- Control stream handshake flows
-- Request correlation and timeout handling
-
-## Usage in Gate
-
-The P2P crate integrates with other Gate components:
-
-**HTTP Server Integration:**
-```rust
-// HTTP server uses high-level P2P API
-let response = p2p_node.send_chat_completion(peer_id, request).await?;
-```
-
-**Provider Integration:**
-```rust
-// Update P2P capabilities when local providers change
-p2p_node.update_capabilities(updated_capabilities).await;
-```
-
-**Relay Integration:**
-```rust
-// Open SNI proxy for public HTTPS endpoints
-let proxy = p2p_node.open_sni_proxy(peer_id, domain).await?;
+// Handle SNI proxy streams
+let sni_handle = session.take_sni_proxy_handle().unwrap();
+// SNI streams are managed externally by the relay application
 ```
 
 ## Dependencies
 
 - `iroh` - Core P2P networking and QUIC transport
-- `tokio` - Async runtime and channels
-- `serde` / `serde_json` - Protocol message serialization
+- `tokio` - Async runtime and stream management
+- `serde` / `serde_json` - Control message serialization
 - `tracing` - Structured logging
-- `thiserror` - Error handling
-- `rand` - Message ID generation
-- `hex` - Request ID encoding
+- `dashmap` - Concurrent stream storage
+- `uuid` - Request ID generation
 
 ## Security
 
-- **Transport Encryption**: All communication encrypted via Iroh QUIC
-- **Node Identity**: Ed25519 keypairs for node identification
-- **Trust-Based Access**: Only configured trusted peers can make requests
-- **Stream Isolation**: Different protocols isolated on separate streams
-- **No Credential Transmission**: Private keys never leave local node
+- **Transport Encryption**: All communication via Iroh's encrypted QUIC
+- **Node Identity**: Ed25519 keypairs for peer identification
+- **Capability-Based**: Peers negotiate supported protocols
+- **Stream Isolation**: Different protocols on separate streams

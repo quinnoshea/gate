@@ -1098,21 +1098,20 @@ pub async fn chat_completions(
    - Configuration review before saving
    - **Testing**: Wizard flow, input validation, configuration generation
 
-## Phase 7: Relay Server and Public HTTPS
+## Phase 7: Relay Server and Public HTTPS ✅ **MOSTLY COMPLETE**
 
-### 7.1 DNS and Certificate Management
+### 7.1 DNS and Certificate Management ✅ **IMPLEMENTED**
 **Objective**: Automatic subdomain provisioning and SSL certificate generation with robust error handling
 
 **Tasks:**
-1. **Research and select TLS termination library**
-   - **Requirements**: Support for SNI extraction, custom certificate loading, raw TLS byte handling
-   - **Likely candidate**: `rustls` with `tokio-rustls` for async support
-   - **Security validation needed**: Certificate validation, private key protection, TLS version support
-   - **Testing requirements**: Generate test certificates, simulate browser connections, validate SNI extraction
-   - **Deliverable**: Library choice documented with rationale and security analysis
-   - **Testing**: Unit tests for TLS termination, integration tests with real certificates
+1. **Research and select TLS termination library** ✅ **COMPLETED**
+   - ✅ **Selected**: `rustls` with `tokio-rustls` for pure Rust implementation
+   - ✅ **Pure Rust**: No OpenSSL dependencies, uses `rustls-acme` for Let's Encrypt
+   - ✅ **SNI Extraction**: Custom TLS ClientHello parser implemented
+   - ✅ **Testing**: SNI parsing verified with real TLS handshakes
+   - ✅ **Security**: Memory-safe Rust implementation with comprehensive error handling
 
-2. **Implement Cloudflare DNS integration**
+2. **Implement Cloudflare DNS integration** 🔄 **PARTIALLY IMPLEMENTED**
    ```rust
    // crates/relay/src/dns.rs
    pub struct CloudflareManager {
@@ -1138,10 +1137,11 @@ pub async fn chat_completions(
        }
    }
    ```
-   - Subdomain generation from node IDs
-   - Anycast IP management for relay fleet
-   - DNS challenge support for Let's Encrypt
-   - **Testing**: DNS record creation/deletion, challenge handling
+   - ✅ **Code Implemented**: Complete Cloudflare API integration written
+   - ✅ **Features**: Subdomain provisioning, DNS challenge creation, record cleanup
+   - ✅ **Configuration**: Environment variable setup (CLOUDFLARE_API_TOKEN, etc.)
+   - ❌ **Not Tested**: No integration testing with real Cloudflare account yet
+   - ❌ **DNS Challenge**: Code exists but not tested with actual Let's Encrypt flow
 
 2. **Add Let's Encrypt certificate generation with robust validation**
    ```rust

@@ -18,17 +18,25 @@ path = "src/main.rs"
 hellas-gate-core = { path = "../core" }
 hellas-gate-p2p = { path = "../p2p" }
 hellas-gate-daemon = { path = "../daemon" }
+hellas-gate-relay = { path = "../relay" }
 
 tokio = { workspace = true }
 tracing = { workspace = true }
 serde = { workspace = true }
 serde_json = "1.0"
 anyhow = { workspace = true }
+rand = { workspace = true }
+iroh = { workspace = true }
 
 # CLI dependencies
 clap = { version = "4.0", features = ["derive", "env"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-appender = "0.2"
 dirs = "5.0"
+hex = "0.4"
+
+# Configuration management
+config = "0.14"
 
 
 [features]

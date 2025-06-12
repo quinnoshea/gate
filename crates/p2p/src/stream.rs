@@ -7,6 +7,7 @@ use tracing::debug;
 use crate::{P2PError, Result};
 
 /// Wrapper around Iroh streams with convenience methods
+#[derive(Debug)]
 pub struct P2PStream {
     send: SendStream,
     recv: RecvStream,
@@ -137,6 +138,11 @@ impl P2PStream {
         (&mut self.send, &mut self.recv)
     }
 
+    /// Split the stream into send and receive halves
+    pub fn into_split(self) -> (SendStream, RecvStream) {
+        (self.send, self.recv)
+    }
+
     /// Finish the send stream
     ///
     /// # Errors
@@ -146,6 +152,32 @@ impl P2PStream {
         self.send
             .finish()
             .map_err(|e| P2PError::ConnectionFailed(format!("Failed to finish stream: {e}")))
+    }
+}
+
+impl tokio::io::AsyncWrite for P2PStream {
+    fn poll_write(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<std::result::Result<usize, std::io::Error>> {
+        std::pin::Pin::new(&mut self.send)
+            .poll_write(cx, buf)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+    }
+
+    fn poll_flush(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::result::Result<(), std::io::Error>> {
+        std::pin::Pin::new(&mut self.send).poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::result::Result<(), std::io::Error>> {
+        std::pin::Pin::new(&mut self.send).poll_shutdown(cx)
     }
 }
 

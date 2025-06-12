@@ -11,7 +11,7 @@ pub struct GateId([u8; 32]);
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GateAddr {
     pub id: GateId,
-    pub addr: String,
+    pub direct_addresses: Vec<std::net::SocketAddr>,
 }
 
 impl GateId {
@@ -57,14 +57,21 @@ impl std::str::FromStr for GateId {
 impl GateAddr {
     /// Create a new `GateAddr`
     #[must_use]
-    pub const fn new(id: GateId, addr: String) -> Self {
-        Self { id, addr }
+    pub fn new(id: GateId, direct_addresses: Vec<std::net::SocketAddr>) -> Self {
+        Self {
+            id,
+            direct_addresses,
+        }
     }
 }
 
 impl fmt::Display for GateAddr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}@{}", self.id, self.addr)
+        if self.direct_addresses.is_empty() {
+            write!(f, "{}", self.id)
+        } else {
+            write!(f, "{}@{}", self.id, self.direct_addresses[0])
+        }
     }
 }
 
@@ -73,6 +80,17 @@ impl std::str::FromStr for GateAddr {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parts: Vec<&str> = s.splitn(2, '@').collect();
+        if parts.len() == 1 {
+            // Just an ID, no addresses
+            let id = parts[0]
+                .parse::<GateId>()
+                .map_err(|e| format!("Invalid GateId: {e}"))?;
+            return Ok(Self {
+                id,
+                direct_addresses: vec![],
+            });
+        }
+
         if parts.len() != 2 {
             return Err("GateAddr must be in format id@addr".to_string());
         }
@@ -80,8 +98,15 @@ impl std::str::FromStr for GateAddr {
         let id = parts[0]
             .parse::<GateId>()
             .map_err(|e| format!("Invalid GateId: {e}"))?;
-        let addr = parts[1].to_string();
 
-        Ok(Self { id, addr })
+        // Parse as socket address (ip:port format)
+        let socket_addr = parts[1]
+            .parse::<std::net::SocketAddr>()
+            .map_err(|e| format!("Invalid socket address: {e}"))?;
+
+        Ok(Self {
+            id,
+            direct_addresses: vec![socket_addr],
+        })
     }
 }

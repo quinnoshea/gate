@@ -36,6 +36,23 @@ serde_yaml = "0.9"
 # HTTP client for upstream providers
 reqwest = { version = "0.11", features = ["json", "stream"] }
 
+# TLS certificate generation and handling
+rustls = "0.23"
+rustls-pemfile = "2.0"
+rcgen = "0.12"
+tokio-rustls = "0.25"
+
+# ACME/LetsEncrypt support
+acme-lib = "0.9"
+openssl = "0.10"
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+time = "0.3"
+
+# Cryptography
+sha2 = "0.10"
+hex = "0.4"
 
 # System utilities
 dirs = "5.0"
