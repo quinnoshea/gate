@@ -1,6 +1,7 @@
 .direnv
 .envrc
 .state
+.claude
 
 target/
 .env.local

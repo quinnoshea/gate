@@ -1,0 +1,33 @@
+syntax = "proto3";
+package gate.common.v1;
+
+// Gate node identifier (32 bytes)
+message GateId {
+  bytes id = 1;  // Must be exactly 32 bytes
+}
+
+// Network socket address
+message SocketAddr {
+  oneof addr {
+    string ipv4 = 1;  // "ip:port" format
+    string ipv6 = 2;  // "[ip]:port" format
+  }
+}
+
+// Gate node address containing ID and direct addresses
+message GateAddr {
+  GateId id = 1;
+  repeated SocketAddr direct_addresses = 2;
+}
+
+// JSON value for dynamic content
+message JsonValue {
+  string json = 1;  // JSON-encoded string (simpler than google.protobuf.Struct)
+}
+
+// Protocol version information
+message ProtocolVersion {
+  uint32 major = 1;
+  uint32 minor = 2;
+  uint32 patch = 3;
+}

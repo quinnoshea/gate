@@ -32,6 +32,10 @@ struct Cli {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Install default crypto provider for rustls
+    rustls::crypto::ring::default_provider().install_default()
+        .map_err(|_| anyhow::anyhow!("Failed to install rustls crypto provider"))?;
+
     let cli = Cli::parse();
 
     // Initialize logging with component name

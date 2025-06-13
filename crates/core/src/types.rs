@@ -57,7 +57,7 @@ impl std::str::FromStr for GateId {
 impl GateAddr {
     /// Create a new `GateAddr`
     #[must_use]
-    pub fn new(id: GateId, direct_addresses: Vec<std::net::SocketAddr>) -> Self {
+    pub const fn new(id: GateId, direct_addresses: Vec<std::net::SocketAddr>) -> Self {
         Self {
             id,
             direct_addresses,
@@ -110,3 +110,4 @@ impl std::str::FromStr for GateAddr {
         })
     }
 }
+

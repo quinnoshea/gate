@@ -1,0 +1,32 @@
+syntax = "proto3";
+package gate.common.v1;
+
+// Comprehensive error structure
+message Error {
+  ErrorCode code = 1;
+  string message = 2;
+  map<string, string> details = 3;  // Additional context for debugging
+  
+  enum ErrorCode {
+    OK = 0;
+    REQUEST_FAILED = 1;
+    PERMISSION_DENIED = 2;
+    NOT_FOUND = 3;
+    INVALID_ARGUMENT = 4;
+    INTERNAL_ERROR = 5;
+    SERVICE_UNAVAILABLE = 6;
+    TIMEOUT = 7;
+    RATE_LIMITED = 8;
+    TASK_FAILED = 9;
+    TASK_CANCELLED = 10;
+    DNS_CHALLENGE_FAILED = 11;
+  }
+}
+
+// Standard result wrapper for operations that can fail
+message Result {
+  oneof result {
+    bytes success = 1;     // Serialized success response
+    Error error = 2;       // Error details
+  }
+}

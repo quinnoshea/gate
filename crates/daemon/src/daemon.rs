@@ -2,799 +2,883 @@
 
 use crate::config::DaemonConfig;
 use crate::http::HttpServer;
-use crate::tls::TlsHandler;
-use crate::tls_bridge::TlsBridge;
+use crate::service::DaemonServiceImpl;
 use crate::upstream::UpstreamClient;
 use crate::{DaemonError, Result};
-
-use hellas_gate_p2p::{InferenceRequest, P2PSession};
+use hellas_gate_proto::pb::gate::inference::v1::*;
+use hellas_gate_proto::pb::gate::relay::v1::relay_service_server::RelayServiceServer;
+use iroh::Endpoint;
+use n0_watcher::Watcher;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn};
+use tonic::transport::Server;
+use tracing::{error, info, warn, trace};
+use tokio_stream::StreamExt;
+use tonic_iroh_transport::GrpcProtocolHandler;
+
+/// P2P connection information for Axum request extensions
+/// Just holds references to the actual Iroh objects that contain all the rich metadata
+#[derive(Debug, Clone)]
+pub struct P2pConnectionInfo {
+    /// Short hash used as relay domain prefix (e.g., "abc123" in "abc123.private.hellas.ai") 
+    pub relay_domain_prefix: String,
+    /// The full domain used for this connection
+    pub domain: String,
+    /// The actual Iroh connection - contains remote_node_id, remote_address, stats, etc.
+    pub connection: iroh::endpoint::Connection,
+    /// Local Iroh endpoint - contains local node_id, bound addresses, etc.
+    pub endpoint: iroh::Endpoint,
+}
+
+/// Context for handling TLS stream forwarding - contains everything needed
+#[derive(Clone)]
+pub struct TlsStreamContext {
+    pub domain: String,
+    pub relay_domain_prefix: String,
+    pub tls_acceptor: tokio_rustls::TlsAcceptor,
+    pub http_server: std::sync::Arc<crate::http::HttpServer>,
+    pub connection: iroh::endpoint::Connection,
+    pub endpoint: iroh::Endpoint,
+}
+
+impl TlsStreamContext {
+    /// Create new context with all required fields
+    pub fn new(
+        domain: String,
+        relay_domain_prefix: String,
+        tls_acceptor: tokio_rustls::TlsAcceptor,
+        http_server: std::sync::Arc<crate::http::HttpServer>,
+        connection: iroh::endpoint::Connection,
+        endpoint: iroh::Endpoint,
+    ) -> Self {
+        Self {
+            domain,
+            relay_domain_prefix,
+            tls_acceptor,
+            http_server,
+            connection,
+            endpoint,
+        }
+    }
+
+    pub fn to_p2p_info(&self) -> P2pConnectionInfo {
+        P2pConnectionInfo {
+            relay_domain_prefix: self.relay_domain_prefix.clone(),
+            domain: self.domain.clone(),
+            connection: self.connection.clone(),
+            endpoint: self.endpoint.clone(),
+        }
+    }
+
+    /// Handle a TLS stream with this context
+    pub async fn handle_stream(
+        &self,
+        p2p_send: iroh::endpoint::SendStream,
+        p2p_recv: iroh::endpoint::RecvStream,
+    ) -> crate::Result<()> {
+        info!("TLS FORWARDING: Terminating TLS for domain: {} from relay", self.domain);
+        
+        // Create a bidirectional stream from the P2P streams
+        let p2p_stream = BiDirectionalStream::new(p2p_send, p2p_recv);
+        
+        // Terminate TLS to get decrypted stream
+        let decrypted_stream = self.tls_acceptor.accept(p2p_stream).await?;
+        
+        info!("TLS FORWARDING: Successfully terminated TLS, forwarding to Axum");
+        
+        // Forward decrypted stream directly to Axum with P2P info
+        self.http_server.handle_stream_with_p2p_info(decrypted_stream, Some(self.to_p2p_info())).await?;
+        
+        info!("TLS FORWARDING: Stream completed successfully for domain: {}", self.domain);
+        Ok(())
+    }
+}
+
+/// Bidirectional stream wrapper for P2P streams
+pub struct BiDirectionalStream {
+    send: iroh::endpoint::SendStream,
+    recv: iroh::endpoint::RecvStream,
+}
+
+impl BiDirectionalStream {
+    pub fn new(send: iroh::endpoint::SendStream, recv: iroh::endpoint::RecvStream) -> Self {
+        Self { send, recv }
+    }
+}
+
+impl tokio::io::AsyncRead for BiDirectionalStream {
+    fn poll_read(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.recv).poll_read(cx, buf)
+    }
+}
+
+impl tokio::io::AsyncWrite for BiDirectionalStream {
+    fn poll_write(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        match std::pin::Pin::new(&mut self.send).poll_write(cx, buf) {
+            std::task::Poll::Ready(Ok(n)) => std::task::Poll::Ready(Ok(n)),
+            std::task::Poll::Ready(Err(e)) => std::task::Poll::Ready(Err(std::io::Error::other(e))),
+            std::task::Poll::Pending => std::task::Poll::Pending,
+        }
+    }
+
+    fn poll_flush(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<std::io::Result<()>> {
+        match std::pin::Pin::new(&mut self.send).poll_flush(cx) {
+            std::task::Poll::Ready(Ok(())) => std::task::Poll::Ready(Ok(())),
+            std::task::Poll::Ready(Err(e)) => std::task::Poll::Ready(Err(std::io::Error::other(e))),
+            std::task::Poll::Pending => std::task::Poll::Pending,
+        }
+    }
+
+    fn poll_shutdown(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<std::io::Result<()>> {
+        match std::pin::Pin::new(&mut self.send).poll_shutdown(cx) {
+            std::task::Poll::Ready(Ok(())) => std::task::Poll::Ready(Ok(())),
+            std::task::Poll::Ready(Err(e)) => std::task::Poll::Ready(Err(std::io::Error::other(e))),
+            std::task::Poll::Pending => std::task::Poll::Pending,
+        }
+    }
+}
 
 /// Main Gate daemon that orchestrates all services
 pub struct GateDaemon {
-    config: DaemonConfig,
-    identity: Vec<u8>,
-    state_dir: std::path::PathBuf,
-    p2p_session: Option<Arc<P2PSession>>,
-    http_server: Option<HttpServer>,
-    tls_handler: Option<TlsHandler>,
-    tls_bridge: Option<TlsBridge>,
-    upstream_client: UpstreamClient,
+    endpoint: Endpoint,
+    cert_manager: crate::certs::CertificateManager,
+    discovered_relays: Arc<tokio::sync::RwLock<std::collections::HashSet<iroh::NodeId>>>,
     shutdown_token: CancellationToken,
 }
 
 impl GateDaemon {
     /// Create a new daemon with the given configuration, identity, and state directory
+    /// This fully initializes all components and starts background services
     ///
     /// # Errors
     ///
     /// Returns an error if daemon initialization fails
-    pub fn new(
+    pub async fn new(
         config: DaemonConfig,
         identity: Vec<u8>,
         state_dir: std::path::PathBuf,
     ) -> Result<Self> {
-        let upstream_client = UpstreamClient::new(&config.upstream)?;
-
+        info!("Initializing Gate daemon components");
+        
+        let shutdown_token = CancellationToken::new();
+        
+        // Initialize P2P endpoint
+        let endpoint = Self::create_p2p_endpoint(&config, &identity).await?;
+        
+        // Initialize certificate manager
+        let cert_dir = state_dir.join("certificates");
+        let le_config = config.tls.letsencrypt.clone().unwrap_or_default();
+        let cert_manager = crate::certs::CertificateManager::new(le_config, endpoint.clone(), cert_dir).await?;
+        
+        // Start background services (pass discovered_relays reference)
+        let discovered_relays = Arc::new(tokio::sync::RwLock::new(std::collections::HashSet::new()));
+        Self::start_background_services(&config, &identity, &endpoint, &cert_manager, discovered_relays.clone(), shutdown_token.clone()).await?;
+        
+        info!("Gate daemon fully initialized and running");
+        
         Ok(Self {
-            config,
-            identity,
-            state_dir,
-            p2p_session: None,
-            http_server: None,
-            tls_handler: None,
-            tls_bridge: None,
-            upstream_client,
-            shutdown_token: CancellationToken::new(),
+            endpoint,
+            cert_manager,
+            discovered_relays,
+            shutdown_token,
         })
     }
 
-    /// Start the daemon and all its services
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if any service fails to start
-    pub async fn start(&mut self) -> Result<hellas_gate_core::GateAddr> {
-        info!("Starting Gate daemon");
-
-        // Test upstream connection and list models
-        self.test_upstream_connection().await?;
-
-        // Start P2P session
-        let node_addr = self.start_p2p().await?;
-
-        // Start HTTP server
-        self.start_http().await?;
-
-        // Initialize TLS handler if enabled
-        if self.config.tls.enabled {
-            self.start_tls(&node_addr).await?;
-            // Initialize TLS bridge for P2P integration
-            self.start_tls_bridge().await?;
-            // Also start direct TLS server for testing
-            self.start_tls_server().await?;
-        }
-
-        info!("Gate daemon started successfully");
-        Ok(node_addr)
+    /// Get a reference to the certificate manager
+    pub fn cert_manager(&self) -> &crate::certs::CertificateManager {
+        &self.cert_manager
     }
 
-    /// Test connection to upstream provider and list available models
-    async fn test_upstream_connection(&self) -> Result<()> {
-        info!(
-            "Testing upstream connection to: {}",
-            self.config.upstream.default_url
-        );
-
-        match self.upstream_client.list_models().await {
-            Ok(models) => {
-                info!("Upstream connection successful!");
-
-                // Extract and log model names
-                if let Some(data) = models.get("data").and_then(|d| d.as_array()) {
-                    let model_names: Vec<String> = data
-                        .iter()
-                        .filter_map(|model| model.get("id").and_then(|id| id.as_str()))
-                        .map(|s| s.to_string())
-                        .collect();
-
-                    info!("Available models: {:?}", model_names);
-                    info!("Found {} models from upstream provider", model_names.len());
-
-                    // Test with a simple inference request
-                    self.test_simple_inference().await?;
-                } else {
-                    info!("Models response: {}", models);
-                }
-            }
-            Err(e) => {
-                warn!("Upstream connection failed: {}", e);
-                warn!(
-                    "Continuing without upstream provider - P2P requests will use mock responses"
-                );
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Test a simple inference request to verify the loaded model works
-    async fn test_simple_inference(&self) -> Result<()> {
-        info!("Testing simple inference request");
-
-        let test_request = crate::upstream::InferenceRequest::new(serde_json::json!({
-            "model": self.config.upstream.test_model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": "Respond with only the word 'SUCCESS' and nothing else."
-                }
-            ],
-            "max_tokens": 5,
-            "temperature": 0.1
-        }))?;
-
-        match self.upstream_client.chat_completion(test_request).await {
-            Ok(response) => {
-                if let Some(content) = response
-                    .response
-                    .get("choices")
-                    .and_then(|c| c.as_array())
-                    .and_then(|arr| arr.first())
-                    .and_then(|choice| choice.get("message"))
-                    .and_then(|msg| msg.get("content"))
-                    .and_then(|content| content.as_str())
-                {
-                    info!("Inference test successful! Response: '{}'", content.trim());
-                } else {
-                    info!("Inference test response: {}", response.response);
-                }
-            }
-            Err(e) => {
-                warn!("Inference test failed: {}", e);
-                warn!("Model may not be loaded - continuing anyway");
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Start the P2P networking session
-    async fn start_p2p(&mut self) -> Result<hellas_gate_core::GateAddr> {
-        info!("Starting P2P session");
-
-        let mut builder = P2PSession::builder()
-            .with_port(self.config.p2p.port)
-            .with_inference();
-
-        // Use identity provided by CLI
-        builder = builder.with_private_key(&self.identity)?;
-        info!("Using identity provided by CLI");
-
-        let mut session = builder.build().await?;
-        let node_id = session.node_id();
-        let node_addr = session.node_addr().await?;
-
-        info!("P2P session started with node ID: {node_id}");
-        info!("P2P node address: {node_addr}");
-
-        // Connect to bootstrap peers
-        for peer_addr_str in &self.config.p2p.bootstrap_peers {
-            info!("Connecting to bootstrap peer: {peer_addr_str}");
-
-            match peer_addr_str.parse::<hellas_gate_core::GateAddr>() {
-                Ok(peer_addr) => {
-                    match session.add_peer(peer_addr.clone()).await {
-                        Ok(connection_handle) => {
-                            info!("Started connection to bootstrap peer: {}", peer_addr.id);
-                            // Spawn a task to wait for connection establishment
-                            tokio::spawn(async move {
-                                match connection_handle.wait_connected().await {
-                                    Ok(peer_id) => {
-                                        info!("Bootstrap peer {} connected successfully", peer_id);
-                                    }
-                                    Err(e) => {
-                                        warn!("Bootstrap peer connection failed: {}", e);
-                                    }
-                                }
-                            });
-                        }
-                        Err(e) => {
-                            warn!("Failed to add bootstrap peer {}: {}", peer_addr_str, e);
-                        }
-                    }
-                }
-                Err(e) => {
-                    warn!("Invalid bootstrap peer address {}: {}", peer_addr_str, e);
-                }
-            }
-        }
-
-        // Get inference request handle (daemon nodes handle inference)
-        let mut inference_handle = session
-            .take_inference_handle()
-            .ok_or_else(|| DaemonError::Other(anyhow::anyhow!("Inference protocol not enabled")))?;
-        let upstream_client = self.upstream_client.clone();
-
-        // Spawn task to handle incoming inference requests
-        tokio::spawn(async move {
-            info!("P2P inference handler started");
-
-            while let Some(mut request) = inference_handle.next().await {
-                let peer_id = request.peer_id;
-                info!("Processing inference request from peer: {peer_id}");
-
-                // Check if this is a special action request
-                if let Some(action) = request.request_data.get("action").cloned() {
-                    match action.as_str() {
-                        Some("list_models") => {
-                            Self::handle_list_models(&upstream_client, &mut request).await;
-                        }
-                        _ => {
-                            Self::handle_unknown_action(&mut request, &action).await;
-                        }
-                    }
-                } else {
-                    // Handle regular inference request
-                    Self::handle_inference(&upstream_client, &mut request).await;
-                }
-            }
-
-            info!("P2P inference handler stopped");
-        });
-
-        self.p2p_session = Some(Arc::new(session));
-        Ok(node_addr)
-    }
-
-    /// Start the HTTP server
-    async fn start_http(&mut self) -> Result<()> {
-        info!("Starting HTTP server on {}", self.config.http.bind_addr);
-
-        let p2p_session = self
-            .p2p_session
-            .as_ref()
-            .ok_or_else(|| DaemonError::Other(anyhow::anyhow!("P2P session not started")))?;
-
-        let http_server = HttpServer::new(
-            self.config.http.clone(),
-            Arc::new(self.upstream_client.clone()),
-            p2p_session.node_id(),
-        )?;
-
-        self.http_server = Some(http_server);
-        Ok(())
-    }
-
-    /// Initialize the TLS handler
-    async fn start_tls(&mut self, node_addr: &hellas_gate_core::GateAddr) -> Result<()> {
-        info!("Initializing TLS handler");
-
-        let node_id = hex::encode(node_addr.id.as_bytes());
-
-        // Check if we should request a domain from relay for DNS challenge
-        if self.should_request_domain_from_relay().await? {
-            info!("DNS challenge support detected, requesting domain from relay");
-            if let Some((domain, relay_peer_id)) = self.request_domain_from_relay(node_addr).await?
-            {
-                info!("Received domain from relay: {}", domain);
-
-                // Start ACME certificate obtainment process
-                if let Err(e) = self
-                    .start_acme_certificate_process(&domain, relay_peer_id)
-                    .await
-                {
-                    warn!("Failed to start ACME certificate process: {}", e);
-                    info!("Continuing with self-signed certificate");
-                }
-            }
-        }
-
-        let tls_handler = TlsHandler::new(&node_id, &self.identity)?;
-
-        info!(
-            "TLS handler configured for domain: {}",
-            tls_handler.domain()
-        );
-        info!("Certificate info: {}", tls_handler.certificate_info());
-
-        self.tls_handler = Some(tls_handler);
-        Ok(())
-    }
-
-    /// Initialize the TLS bridge for P2P integration
-    async fn start_tls_bridge(&mut self) -> Result<()> {
-        info!("Initializing TLS bridge");
-
-        let tls_handler = self
-            .tls_handler
-            .as_ref()
-            .ok_or_else(|| DaemonError::Other(anyhow::anyhow!("TLS handler not initialized")))?;
-
-        let tls_bridge = TlsBridge::new(Arc::new(tls_handler.clone()), self.config.http.bind_addr)?;
-
-        info!(
-            "TLS bridge configured to forward to HTTP server at {}",
-            self.config.http.bind_addr
-        );
-        self.tls_bridge = Some(tls_bridge);
-        Ok(())
-    }
-
-    /// Start direct TLS server for testing
-    async fn start_tls_server(&self) -> Result<()> {
-        let tls_handler = self
-            .tls_handler
-            .as_ref()
-            .ok_or_else(|| DaemonError::Other(anyhow::anyhow!("TLS handler not initialized")))?;
-
-        let bind_addr = self.config.tls.bind_addr;
-        let tls_handler_clone = tls_handler.clone();
-        let upstream_client = Arc::new(self.upstream_client.clone());
-        let shutdown_token = self.shutdown_token.clone();
-
-        info!("Starting direct TLS server on {}", bind_addr);
-        info!("TLS server domain: {}", tls_handler.domain());
-
-        tokio::spawn(async move {
-            let listener = match tokio::net::TcpListener::bind(bind_addr).await {
-                Ok(listener) => {
-                    info!("TLS server listening on {}", bind_addr);
-                    listener
-                }
-                Err(e) => {
-                    warn!("Failed to bind TLS server to {}: {}", bind_addr, e);
-                    return;
-                }
-            };
-
-            loop {
-                tokio::select! {
-                    result = listener.accept() => {
-                        match result {
-                            Ok((stream, peer_addr)) => {
-                                debug!("Accepted TLS connection from {}", peer_addr);
-
-                                let handler = tls_handler_clone.clone();
-                                let upstream = upstream_client.clone();
-
-                                tokio::spawn(async move {
-                                    if let Err(e) = Self::handle_tls_connection(stream, handler, upstream).await {
-                                        warn!("TLS connection error from {}: {}", peer_addr, e);
-                                    }
-                                });
-                            }
-                            Err(e) => {
-                                warn!("Failed to accept TLS connection: {}", e);
-                            }
-                        }
-                    }
-                    _ = shutdown_token.cancelled() => {
-                        info!("TLS server shutting down");
-                        break;
-                    }
-                }
-            }
-        });
-
-        Ok(())
-    }
-
-    /// Handle a single TLS connection
-    async fn handle_tls_connection(
-        stream: tokio::net::TcpStream,
-        tls_handler: crate::tls::TlsHandler,
-        _upstream_client: Arc<UpstreamClient>,
-    ) -> Result<()> {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-        use tokio_rustls::TlsAcceptor;
-
-        // Get the TLS acceptor from the handler
-        let acceptor = TlsAcceptor::from(Arc::new(tls_handler.create_tls_config()?));
-
-        // Perform TLS handshake
-        let tls_stream = acceptor
-            .accept(stream)
-            .await
-            .map_err(|e| DaemonError::Other(anyhow::anyhow!("TLS handshake failed: {}", e)))?;
-
-        info!("TLS handshake completed successfully");
-
-        // Read HTTP request
-        let (mut reader, mut writer) = tokio::io::split(tls_stream);
-        let mut buffer = vec![0u8; 4096];
-
-        let bytes_read = reader.read(&mut buffer).await.map_err(DaemonError::Io)?;
-
-        if bytes_read == 0 {
-            warn!("Connection closed immediately after TLS handshake");
-            return Ok(());
-        }
-
-        buffer.truncate(bytes_read);
-        let request_str = String::from_utf8_lossy(&buffer);
-
-        info!("Received HTTPS request via direct TLS:");
-        info!("--- HTTP Request ---");
-        for line in request_str.lines() {
-            info!("{}", line);
-        }
-        info!("--- End Request ---");
-
-        // Generate response
-        let response_body = serde_json::json!({
-            "message": "Hello from Gate daemon direct TLS!",
-            "request_processed": true,
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-            "tls_domain": tls_handler.domain(),
-            "connection_type": "direct_tls"
-        });
-
-        let response_body_str = response_body.to_string();
-        let response = format!(
-            "HTTP/1.1 200 OK\r\n\
-             Content-Type: application/json\r\n\
-             Content-Length: {}\r\n\
-             Connection: close\r\n\
-             Access-Control-Allow-Origin: *\r\n\
-             \r\n\
-             {}",
-            response_body_str.len(),
-            response_body_str
-        );
-
-        writer
-            .write_all(response.as_bytes())
-            .await
-            .map_err(DaemonError::Io)?;
-        writer.flush().await.map_err(DaemonError::Io)?;
-
-        info!("Sent HTTPS response: {} bytes", response.len());
-        Ok(())
-    }
-
-    /// Run the daemon until shutdown
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the daemon encounters a fatal error
-    pub async fn run(&mut self) -> Result<hellas_gate_core::GateAddr> {
-        // Start the daemon
-        let node_addr = self.start().await?;
-
+    /// Wait for daemon shutdown
+    pub async fn wait_for_shutdown(&self) -> Result<()> {
         // Wait for shutdown signal
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {
-                info!("Received Ctrl+C, shutting down");
-            }
-            _ = self.shutdown_token.cancelled() => {
                 info!("Received shutdown signal");
             }
-        }
-
-        // Shutdown gracefully
-        self.shutdown().await?;
-        Ok(node_addr)
-    }
-
-    /// Gracefully shutdown the daemon
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if shutdown fails
-    pub async fn shutdown(&mut self) -> Result<()> {
-        info!("Shutting down Gate daemon");
-
-        // Signal shutdown
-        self.shutdown_token.cancel();
-
-        // Shutdown HTTP server
-        if let Some(mut http_server) = self.http_server.take() {
-            if let Err(e) = http_server.shutdown().await {
-                warn!("Error shutting down HTTP server: {e}");
+            _ = self.shutdown_token.cancelled() => {
+                info!("Shutdown requested");
             }
         }
+        
+        info!("Gate daemon stopped");
+        Ok(())
+    }
+    
+    /// Request daemon shutdown
+    pub fn shutdown(&self) {
+        self.shutdown_token.cancel();
+    }
 
-        // P2P session doesn't need explicit shutdown - dropping will clean up
-        if let Some(_p2p_session) = self.p2p_session.take() {
-            // Session will be dropped and cleaned up automatically
+    async fn create_p2p_endpoint(config: &DaemonConfig, identity: &[u8]) -> Result<Endpoint> {
+        info!("Initializing P2P endpoint on port {}", config.p2p.port);
+
+        // Create secret key from identity
+        let key_array: [u8; 32] = identity[0..32]
+            .try_into()
+            .map_err(|_| DaemonError::ConfigString("Invalid identity key length".to_string()))?;
+        let secret_key = iroh::SecretKey::from_bytes(&key_array);
+
+        // Create endpoint with port binding
+        let bind_addr = format!("0.0.0.0:{}", config.p2p.port);
+        let endpoint = Endpoint::builder()
+            .secret_key(secret_key)
+            .bind_addr_v4(bind_addr.parse().map_err(|e| {
+                DaemonError::ConfigString(format!("Invalid bind address: {}", e))
+            })?)
+            .relay_mode(iroh::RelayMode::Disabled)
+            .discovery_n0()
+            .discovery_local_network()
+            .bind()
+            .await?;
+
+
+        // Debug: Check what addresses the endpoint has
+        let node_id = endpoint.node_id();
+        let bound_sockets = endpoint.bound_sockets();
+        info!("P2P endpoint created - Node ID: {}", node_id);
+        info!("Bound sockets: {}", bound_sockets.len());
+        for (i, addr) in bound_sockets.iter().enumerate() {
+            info!("  Bound socket {}: {}", i + 1, addr);
+        }
+        
+        if bound_sockets.is_empty() {
+            tracing::warn!("No bound sockets found - this may affect P2P connectivity");
         }
 
-        info!("Gate daemon shutdown complete");
+        info!("P2P endpoint initialized successfully");
+        Ok(endpoint)
+    }
+
+    async fn start_background_services(
+        config: &DaemonConfig,
+        identity: &[u8],
+        endpoint: &Endpoint,
+        cert_manager: &crate::certs::CertificateManager,
+        discovered_relays: Arc<tokio::sync::RwLock<std::collections::HashSet<iroh::NodeId>>>,
+        shutdown_token: CancellationToken,
+    ) -> Result<()> {
+        let upstream_client = UpstreamClient::new(&config.upstream)?;
+        
+        // Create TLS forwarding handler
+        let tls_handler = Self::create_tls_forwarding_handler(config, cert_manager, identity, upstream_client.clone(), endpoint.clone()).await?;
+        
+        // Start gRPC inference service with peer discovery AND TLS forwarding
+        Self::start_grpc_service(endpoint, upstream_client.clone(), discovered_relays.clone(), shutdown_token.clone(), cert_manager, identity, tls_handler).await?;
+        
+        // Start HTTP server
+        Self::start_http_server(config, identity, upstream_client, shutdown_token.clone()).await?;
+        
+        // TLS bridge will be created as needed for each connection
+        
+        info!("All background services started successfully");
         Ok(())
     }
 
-    /// Get the daemon configuration
-    #[must_use]
-    pub const fn config(&self) -> &DaemonConfig {
-        &self.config
-    }
-
-    /// Check if the daemon is shutting down
-    #[must_use]
-    pub fn is_shutting_down(&self) -> bool {
-        self.shutdown_token.is_cancelled()
-    }
-
-    /// Handle raw HTTPS bytes from relay and return HTTP response
-    ///
-    /// This is the main entry point for TLS termination and HTTP forwarding
-    pub async fn handle_https_request(&self, https_bytes: &[u8]) -> Result<Vec<u8>> {
-        if let Some(tls_bridge) = &self.tls_bridge {
-            // Use the TLS bridge for proper TLS termination and HTTP forwarding
-            tls_bridge.process_https_bytes(https_bytes).await
-        } else {
-            // Fallback to simple TLS termination if bridge not available
-            let tls_handler = self.tls_handler.as_ref().ok_or_else(|| {
-                DaemonError::Other(anyhow::anyhow!("TLS handler not initialized"))
-            })?;
-
-            // Terminate TLS and get the HTTP request
-            let http_request = tls_handler.terminate_tls(https_bytes).await?;
-
-            info!("Received HTTPS request from relay (fallback mode):");
-            info!("--- HTTP Request ---");
-            for line in http_request.lines() {
-                info!("{}", line);
-            }
-            info!("--- End Request ---");
-
-            // Generate a simple HTTP response
-            let response_body = serde_json::json!({
-                "message": "Hello from Gate daemon (fallback mode)!",
-                "request_processed": true,
-                "timestamp": chrono::Utc::now().to_rfc3339(),
-                "tls_domain": tls_handler.domain()
-            });
-
-            let response_body_str = response_body.to_string();
-            let response = format!(
-                "HTTP/1.1 200 OK\r\n\
-                 Content-Type: application/json\r\n\
-                 Content-Length: {}\r\n\
-                 Connection: close\r\n\
-                 Access-Control-Allow-Origin: *\r\n\
-                 \r\n\
-                 {}",
-                response_body_str.len(),
-                response_body_str
-            );
-
-            info!("Sending HTTP response: {} bytes", response.len());
-            Ok(response.into_bytes())
-        }
-    }
-
-    async fn handle_list_models(upstream_client: &UpstreamClient, request: &mut InferenceRequest) {
-        match upstream_client.list_models().await {
-            Ok(models_response) => {
-                let response = serde_json::json!({
-                    "models": models_response.get("data")
-                });
-
-                if let Err(e) = request.send_json(&response).await {
-                    warn!("Failed to send models response: {e}");
+    async fn start_grpc_service(
+        endpoint: &Endpoint,
+        upstream_client: UpstreamClient,
+        discovered_relays: Arc<tokio::sync::RwLock<std::collections::HashSet<iroh::NodeId>>>,
+        shutdown_token: CancellationToken,
+        cert_manager: &crate::certs::CertificateManager,
+        identity: &[u8],
+        tls_handler: TlsForwardingProtocolHandler,
+    ) -> Result<()> {
+        info!("Starting gRPC inference service with peer discovery");
+        
+        // Create inference service implementation
+        let inference_service = Arc::new(DaemonServiceImpl::new(Arc::new(upstream_client)));
+        
+        // Create tonic-iroh protocol handler for inference service
+        let (handler, incoming, inference_alpn) = GrpcProtocolHandler::for_service::<inference_service_server::InferenceServiceServer<DaemonServiceImpl>>();
+        
+        // Generate relay service ALPN for comparison
+        let (_, _, relay_alpn) = GrpcProtocolHandler::for_service::<RelayServiceServer<hellas_gate_relay::service::RelayServiceImpl>>();
+        
+        info!("Monitoring for relay service ALPN: {}", String::from_utf8_lossy(&relay_alpn));
+        
+        // Set up TLS forwarding ALPN
+        const TLS_FORWARD_ALPN: &[u8] = b"/gate.relay.v1.TlsForward/1.0";
+        let tls_forward_alpn = TLS_FORWARD_ALPN.to_vec();
+        info!("Registering TLS forwarding ALPN: {}", String::from_utf8_lossy(&tls_forward_alpn));
+        
+        // Set up router with both inference service AND TLS forwarding
+        let router = iroh::protocol::Router::builder(endpoint.clone())
+            .accept(&inference_alpn, handler)
+            .accept(&tls_forward_alpn, tls_handler)
+            .spawn();
+            
+        info!("Central router created with gRPC inference and TLS forwarding ALPNs");
+        
+        // Start event-driven relay discovery using iroh's discovery stream
+        // This will listen for new peer discovery events and connect to relay services
+        let endpoint_clone = endpoint.clone();
+        let relays_clone = discovered_relays.clone();
+        let relay_alpn_clone = relay_alpn.clone();
+        let shutdown_token_clone = shutdown_token.clone();
+        let cert_manager_arc = Arc::new((*cert_manager).clone());
+        let identity_clone = identity.to_vec();
+        tokio::spawn(async move {
+            Self::listen_for_relay_peers(endpoint_clone, relays_clone, relay_alpn_clone, shutdown_token_clone, cert_manager_arc, identity_clone).await;
+        });
+        
+        // Keep router alive by moving it into a task
+        let shutdown_router_token = shutdown_token.clone();
+        tokio::spawn(async move {
+            tokio::select! {
+                _ = shutdown_router_token.cancelled() => {
+                    info!("Router shutting down");
                 }
             }
-            Err(e) => {
-                warn!("Failed to get models from upstream: {e}");
-                Self::send_error_response(request, "Failed to retrieve models", "upstream_error")
-                    .await;
+            // Router is moved into this task and kept alive
+            drop(router);
+        });
+
+        // Start tonic gRPC server with iroh incoming stream
+        let inference_server = inference_service_server::InferenceServiceServer::new((*inference_service).clone());
+        tokio::spawn(async move {
+            tokio::select! {
+                result = Server::builder()
+                    .add_service(inference_server)
+                    .serve_with_incoming(incoming) => {
+                    if let Err(e) = result {
+                        error!("gRPC server error: {}", e);
+                    }
+                }
+                _ = shutdown_token.cancelled() => {
+                    info!("gRPC service shutting down");
+                }
             }
-        }
+        });
+        
+        info!("gRPC inference service started successfully");
+        Ok(())
     }
 
-    async fn handle_inference(upstream_client: &UpstreamClient, request: &mut InferenceRequest) {
-        match crate::upstream::InferenceRequest::new(request.request_data.clone()) {
-            Ok(inference_request) => {
-                match upstream_client.chat_completion(inference_request).await {
-                    Ok(upstream_response) => {
-                        if let Err(e) = request.send_json(&upstream_response.response).await {
-                            warn!("Failed to send response: {e}");
+    async fn start_http_server(
+        config: &DaemonConfig,
+        identity: &[u8],
+        upstream_client: UpstreamClient,
+        shutdown_token: CancellationToken,
+    ) -> Result<()> {
+        info!("Starting HTTP server on {}", config.http.bind_addr);
+        
+        // Derive gate_id from identity
+        let key_array: [u8; 32] = identity[0..32]
+            .try_into()
+            .map_err(|_| DaemonError::ConfigString("Invalid identity key length".to_string()))?;
+        let secret_key = iroh::SecretKey::from_bytes(&key_array);
+        let gate_id = hellas_gate_core::GateId::from_bytes(*secret_key.public().as_bytes());
+        
+        let http_server = HttpServer::new(
+            config.http.clone(),
+            Arc::new(upstream_client),
+            gate_id,
+        )?;
+        
+        // Start HTTP server in background task
+        tokio::spawn(async move {
+            tokio::select! {
+                result = http_server.start() => {
+                    if let Err(e) = result {
+                        error!("HTTP server error: {}", e);
+                    }
+                }
+                _ = shutdown_token.cancelled() => {
+                    info!("HTTP server shutting down");
+                }
+            }
+        });
+        
+        info!("HTTP server started successfully");
+        Ok(())
+    }
+
+
+
+    /// Check if we've discovered any relay peers
+    pub async fn discovered_relay_count(&self) -> usize {
+        self.discovered_relays.read().await.len()
+    }
+    
+    
+    /// Get the daemon's node address for other nodes to connect to
+    pub async fn node_addr(&self) -> Result<hellas_gate_core::GateAddr> {
+        let node_id = self.endpoint.node_id();
+        
+        // Wait for address discovery with timeout
+        let node_addr_watcher = self.endpoint.node_addr();
+        let node_addr = tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            async {
+                while let Ok(None) = node_addr_watcher.get() {
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                }
+                node_addr_watcher.get()
+            }
+        ).await
+        .map_err(|_| DaemonError::ConfigString("Timeout waiting for node address discovery".to_string()))?
+        .map_err(|e| DaemonError::Disconnected(e))?
+        .ok_or_else(|| DaemonError::ConfigString("Node address discovery failed".to_string()))?;
+        
+        // Convert direct addresses to our format
+        let direct_addresses: Vec<std::net::SocketAddr> = node_addr.direct_addresses.into_iter().collect();
+        let gate_id = hellas_gate_core::GateId::from_bytes(*node_id.as_bytes());
+        
+        info!("Node address discovered: {} direct addresses", direct_addresses.len());
+        Ok(hellas_gate_core::GateAddr::new(gate_id, direct_addresses))
+    }
+
+    /// Connect to a relay node for domain registration
+    pub async fn connect_to_relay(&self, relay_addr: &str) -> Result<()> {
+        let gate_addr: hellas_gate_core::GateAddr = relay_addr.parse()
+            .map_err(|e| DaemonError::ConfigString(format!("Invalid relay address: {}", e)))?;
+
+        info!("Connecting to relay: {}", gate_addr.id);
+
+        // Convert to iroh NodeAddr
+        let node_id = iroh::NodeId::from_bytes(gate_addr.id.as_bytes())
+            .map_err(|e| DaemonError::ConfigString(format!("Invalid node ID: {}", e)))?;
+        let node_addr = iroh::NodeAddr::new(node_id).with_direct_addresses(gate_addr.direct_addresses);
+
+        // Test connection using tonic-iroh
+        let iroh_client = tonic_iroh_transport::IrohClient::new(self.endpoint.clone());
+        let _channel = iroh_client.connect_to_service::<inference_service_server::InferenceServiceServer<hellas_gate_relay::service::RelayServiceImpl>>(node_addr)
+            .await.map_err(|e| DaemonError::ConfigString(format!("Failed to connect: {}", e)))?;
+
+        info!("Successfully connected to relay: {}", gate_addr.id);
+        Ok(())
+    }
+
+    /// Listen for relay peers using event-driven discovery
+    async fn listen_for_relay_peers(
+        endpoint: Endpoint,
+        discovered_relays: Arc<tokio::sync::RwLock<std::collections::HashSet<iroh::NodeId>>>,
+        relay_alpn: Vec<u8>,
+        shutdown_token: CancellationToken,
+        cert_manager: Arc<crate::certs::CertificateManager>,
+        identity: Vec<u8>,
+    ) {
+        info!("Starting event-driven relay peer discovery");
+        
+        // Get discovery stream from endpoint for passive peer discovery
+        let mut discovery_stream = endpoint.discovery_stream();
+        
+        loop {
+            tokio::select! {
+                _ = shutdown_token.cancelled() => {
+                    info!("Relay peer discovery shutting down");
+                    break;
+                }
+                
+                // Listen for new peer discovery events
+                discovery_result = discovery_stream.next() => {
+                    match discovery_result {
+                        Some(Ok(discovery_item)) => {
+                            let peer_id = discovery_item.node_id();
+                            
+                            // Check if we've already discovered this relay - early exit to prevent spam
+                            {
+                                let relays = discovered_relays.read().await;
+                                if relays.contains(&peer_id) {
+                                    trace!("Ignoring already discovered relay peer: {} (source: {})", peer_id, discovery_item.provenance());
+                                    continue;
+                                }
+                            }
+                            
+                            info!("Discovered new peer: {} (source: {}), testing for relay service", peer_id, discovery_item.provenance());
+                            
+                            // Try to connect and check if this peer supports the relay service
+                            let node_addr = discovery_item.to_node_addr();
+                            if let Err(e) = Self::try_connect_to_relay_service(
+                                &endpoint, 
+                                peer_id, 
+                                node_addr, 
+                                &relay_alpn,
+                                discovered_relays.clone(),
+                                cert_manager.clone(),
+                                &identity
+                            ).await {
+                                trace!("Peer {} does not support relay service: {}", peer_id, e);
+                            }
+                        }
+                        Some(Err(e)) => {
+                            warn!("Discovery stream error: {}", e);
+                        }
+                        None => {
+                            info!("Discovery stream ended");
+                            break;
                         }
                     }
-                    Err(e) => {
-                        warn!("Upstream request failed: {e}");
-                        Self::send_error_response(
-                            request,
-                            "Upstream provider unavailable",
-                            "upstream_error",
-                        )
-                        .await;
-                    }
                 }
             }
+        }
+        
+        info!("Relay peer discovery stopped");
+    }
+
+    /// Create TLS forwarding protocol handler
+    async fn create_tls_forwarding_handler(
+        config: &DaemonConfig,
+        cert_manager: &crate::certs::CertificateManager,
+        identity: &[u8],
+        upstream_client: UpstreamClient,
+        endpoint: iroh::Endpoint,
+    ) -> Result<TlsForwardingProtocolHandler> {
+        info!("Creating TLS forwarding protocol handler");
+
+        // Create certificate info for TLS termination
+        let cert_manager_clone = cert_manager.clone();
+        let key_array: [u8; 32] = identity[0..32]
+            .try_into()
+            .map_err(|_| DaemonError::ConfigString("Invalid identity key length".to_string()))?;
+        let secret_key = iroh::SecretKey::from_bytes(&key_array);
+        let node_id = hex::encode(secret_key.public().as_bytes());
+        let domain = format!("{}.private.hellas.ai", &node_id[..16]);
+        
+        info!("TLS forwarding handler configuration:");
+        info!("  Node ID: {}", node_id);
+        info!("  Short domain: {}", domain);
+        
+        // Derive gate_id from identity  
+        let gate_id = hellas_gate_core::GateId::from_bytes(*secret_key.public().as_bytes());
+        
+        // Create certificate info for TLS handler
+        let cert_info = cert_manager.get_certificate(&domain).await
+            .ok_or_else(|| DaemonError::Certificate(format!("No certificate found for domain: {}", domain)))?;
+        
+        // Create TLS acceptor for terminating HTTPS traffic
+        let tls_handler = crate::tls::TlsHandler::from_certificate_info(&cert_info)
+            .map_err(|e| DaemonError::Certificate(format!("Failed to create TLS handler: {}", e)))?;
+        
+        let tls_config = tls_handler.create_tls_config()
+            .map_err(|e| DaemonError::Certificate(format!("Failed to create TLS config: {}", e)))?;
+        
+        let tls_acceptor = tokio_rustls::TlsAcceptor::from(std::sync::Arc::new(tls_config));
+        
+        info!("TLS acceptor created for domain: {}", domain);
+        
+        // Create HTTP server instance for stream handling
+        let http_server = std::sync::Arc::new(crate::http::HttpServer::new(
+            config.http.clone(),
+            std::sync::Arc::new(upstream_client.clone()),
+            gate_id,
+        )?);
+        
+        // Create TLS forwarding protocol handler
+        let tls_forwarding_handler = TlsForwardingProtocolHandler {
+            config: config.clone(),
+            cert_manager: cert_manager_clone,
+            domain,
+            node_id,
+            upstream_client,
+            gate_id,
+            tls_acceptor,
+            http_server,
+            endpoint,
+        };
+        
+        info!("TLS forwarding protocol handler created successfully");
+        Ok(tls_forwarding_handler)
+    }
+
+    
+    /// Try to connect to a peer and check if it supports the relay service
+    async fn try_connect_to_relay_service(
+        endpoint: &Endpoint,
+        peer_id: iroh::NodeId,
+        node_addr: iroh::NodeAddr,
+        relay_alpn: &[u8],
+        discovered_relays: Arc<tokio::sync::RwLock<std::collections::HashSet<iroh::NodeId>>>,
+        cert_manager: Arc<crate::certs::CertificateManager>,
+        _identity: &[u8],
+    ) -> Result<()> {
+        trace!("Testing connection to potential relay peer: {}", peer_id);
+        
+        // Clone direct addresses before moving node_addr
+        let direct_addresses = node_addr.direct_addresses.clone();
+        
+        // Try to connect to the peer with the relay service ALPN
+        match endpoint.connect(node_addr, relay_alpn).await {
+            Ok(connection) => {
+                info!("Successfully connected to relay service on peer: {}", peer_id);
+                
+                // Add to discovered relays
+                {
+                    let mut relays = discovered_relays.write().await;
+                    relays.insert(peer_id);
+                }
+                
+                // Create typed relay service client from connection
+                let iroh_client = tonic_iroh_transport::IrohClient::new(endpoint.clone());
+                let gate_id = hellas_gate_core::GateId::from_bytes(*peer_id.as_bytes());
+                let relay_gate_addr = hellas_gate_core::GateAddr::new(gate_id, direct_addresses.into_iter().collect());
+                let node_addr = iroh::NodeAddr::new(peer_id).with_direct_addresses(relay_gate_addr.direct_addresses.clone());
+                
+                // Trigger certificate upgrade check in background
+                let cert_manager_clone = cert_manager.clone();
+                tokio::spawn(async move {
+                    // Check for self-signed certificates that can be upgraded
+                    let self_signed_domains = cert_manager_clone.get_self_signed_domains().await;
+                    
+                    if self_signed_domains.is_empty() {
+                        info!("No self-signed certificates found to upgrade");
+                        return;
+                    }
+                    
+                    info!("Found {} self-signed certificate(s) that could be upgraded: {:?}", 
+                          self_signed_domains.len(), self_signed_domains);
+                    
+                    // Attempt to create relay service client for upgrades
+                    match iroh_client.connect_to_service::<hellas_gate_proto::pb::gate::relay::v1::relay_service_server::RelayServiceServer<hellas_gate_relay::service::RelayServiceImpl>>(node_addr).await {
+                        Ok(channel) => {
+                            let relay_client = hellas_gate_proto::pb::gate::relay::v1::relay_service_client::RelayServiceClient::new(channel);
+                            
+                            // Attempt to upgrade each self-signed certificate
+                            for domain in self_signed_domains {
+                                match cert_manager_clone.upgrade_certificate(&domain, relay_client.clone()).await {
+                                    Ok(cert_info) => {
+                                        info!("Certificate upgrade completed for domain: {} (type: {:?})", 
+                                              cert_info.domain, cert_info.cert_type);
+                                    }
+                                    Err(e) => {
+                                        warn!("Certificate upgrade failed for domain {}: {}", domain, e);
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            warn!("Failed to create relay service client for certificate upgrades: {}", e);
+                        }
+                    }
+                });
+                
+                // Note: Registration with relay happens automatically when the relay
+                // accepts our connection via the TlsForwardingHandler
+                
+                // Close the test connection
+                connection.close(0u32.into(), b"test connection");
+                
+                info!("Added relay peer {} to discovered relay list", peer_id);
+                Ok(())
+            }
             Err(e) => {
-                warn!("Invalid request format: {e}");
-                Self::send_error_response(request, "Invalid request format", "request_error").await;
+                // This peer doesn't support the relay service or connection failed
+                trace!("Peer {} does not support relay service or connection failed: {}", peer_id, e);
+                Err(DaemonError::ConfigString(format!("Not a relay peer: {}", e)))
             }
         }
     }
 
-    async fn handle_unknown_action(request: &mut InferenceRequest, action: &serde_json::Value) {
-        warn!("Unknown action '{}' from peer {}", action, request.peer_id);
-        Self::send_error_response(request, "Unknown action", "request_error").await;
+
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+    use tokio::time::timeout;
+
+    #[tokio::test]
+    async fn test_p2p_endpoint_discovery() {
+        // Test P2P endpoint creation and local discovery
+        println!("=== P2P Endpoint Discovery Test ===");
+        
+        // Create a test endpoint similar to daemon configuration
+        let mut rng = rand::thread_rng();
+        let secret_key = iroh::SecretKey::generate(&mut rng);
+        println!("Generated test node ID: {}", secret_key.public());
+        
+        let endpoint = iroh::Endpoint::builder()
+            .secret_key(secret_key)
+            .bind_addr_v4("0.0.0.0:0".parse().unwrap()) // Random port
+            .relay_mode(iroh::RelayMode::Disabled)
+            .discovery_n0()
+            .discovery_local_network()
+            .bind()
+            .await
+            .expect("Failed to create test endpoint");
+            
+        println!("✓ Endpoint created successfully");
+        println!("  Node ID: {}", endpoint.node_id());
+        
+        // Wait for discovery to find local addresses
+        println!("  Waiting for local endpoint discovery...");
+        tokio::time::sleep(Duration::from_secs(3)).await;
+        
+        // Check bound sockets (what we can actually get)
+        let bound_sockets = endpoint.bound_sockets();
+        println!("  Bound socket addresses: {}", bound_sockets.len());
+        for (i, socket) in bound_sockets.iter().enumerate() {
+            println!("    Socket {}: {}", i + 1, socket);
+        }
+        
+        if bound_sockets.is_empty() {
+            println!("  ⚠️  WARNING: No bound sockets found");
+            println!("  This indicates a socket binding issue");
+        } else {
+            println!("  ✓ Socket binding successful");
+        }
+        
+        // Check node ID and public key
+        println!("  Node public key: {}", endpoint.node_id());
+        
+        println!("=== End P2P Discovery Test ===");
     }
 
-    async fn send_error_response(request: &mut InferenceRequest, message: &str, error_type: &str) {
-        let error_response = serde_json::json!({
-            "error": {
-                "message": message,
-                "type": error_type
+    #[tokio::test]
+    async fn test_daemon_full_initialization() {
+        // Initialize crypto provider for rustls
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+        
+        // Test the new daemon full initialization process
+        println!("=== Daemon Full Initialization Test ===");
+        
+        let config = DaemonConfig::default();
+        let identity = vec![0u8; 32]; // Simple test identity
+        let temp_dir = tempfile::tempdir().unwrap();
+        
+        // Test full daemon initialization (should complete quickly)
+        match timeout(Duration::from_secs(10), GateDaemon::new(config, identity, temp_dir.path().to_path_buf())).await {
+            Ok(Ok(daemon)) => {
+                println!("✓ Daemon full initialization succeeded");
+                
+                // Test that endpoint is immediately available (no Option unwrapping)
+                let bound_sockets = daemon.endpoint.bound_sockets();
+                println!("  Daemon endpoint bound sockets: {}", bound_sockets.len());
+                
+                for (i, addr) in bound_sockets.iter().enumerate() {
+                    println!("    {}: {}", i + 1, addr);
+                }
+                
+                // Test that node_addr works immediately
+                match timeout(Duration::from_secs(5), daemon.node_addr()).await {
+                    Ok(Ok(node_addr)) => {
+                        println!("✓ Node address available: {} direct addresses", node_addr.direct_addresses.len());
+                    }
+                    Ok(Err(e)) => {
+                        println!("⚠️ Node address failed: {}", e);
+                        // This might fail if address discovery is slow, which is OK
+                    }
+                    Err(_) => {
+                        println!("⚠️ Node address discovery timed out - this is expected in some environments");
+                    }
+                }
+                
+                // Test that certificate manager is available
+                let cert_count = daemon.cert_manager().certificate_count().await;
+                println!("✓ Certificate manager available with {} certificates", cert_count);
+            }
+            Ok(Err(e)) => {
+                println!("❌ Daemon initialization failed: {}", e);
+                panic!("Daemon initialization should succeed");
+            }
+            Err(_) => {
+                println!("❌ Daemon initialization timed out");
+                panic!("Daemon initialization should not timeout");
+            }
+        }
+        
+        println!("=== End Daemon Initialization Test ===");
+    }
+}
+
+/// TLS forwarding protocol handler using tonic-iroh IrohStream
+#[derive(Clone)]
+struct TlsForwardingProtocolHandler {
+    config: DaemonConfig,
+    cert_manager: crate::certs::CertificateManager,
+    domain: String,
+    node_id: String,
+    upstream_client: UpstreamClient,
+    gate_id: hellas_gate_core::GateId,
+    tls_acceptor: tokio_rustls::TlsAcceptor,
+    http_server: std::sync::Arc<crate::http::HttpServer>,
+    endpoint: iroh::Endpoint,
+}
+
+impl std::fmt::Debug for TlsForwardingProtocolHandler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TlsForwardingProtocolHandler")
+            .field("domain", &self.domain)
+            .field("node_id", &self.node_id)
+            .finish()
+    }
+}
+
+impl iroh::protocol::ProtocolHandler for TlsForwardingProtocolHandler {
+    async fn accept(&self, conn: iroh::endpoint::Connection) -> std::result::Result<(), iroh::protocol::AcceptError> {
+        info!("TLS FORWARDING: Received P2P connection from relay!");
+        info!("  Target domain: {}", self.domain);
+        info!("  Target node ID: {}", self.node_id);
+
+        // Create stream context with all needed data
+        let context = TlsStreamContext::new(
+            self.domain.clone(),
+            self.node_id.clone(),
+            self.tls_acceptor.clone(),
+            self.http_server.clone(),
+            conn.clone(),
+            self.endpoint.clone(),
+        );
+
+        // Spawn a task to handle this connection and return immediately
+        tokio::spawn(async move {
+            if let Err(e) = Self::handle_connection(conn, context).await {
+                error!("TLS forwarding connection failed: {}", e.to_string());
             }
         });
 
-        if let Err(e) = request.send_json(&error_response).await {
-            warn!("Failed to send error response: {e}");
-        }
+        info!("TLS FORWARDING: Connection accepted, spawned handler task");
+        Ok(())
     }
+}
 
-    /// Check if daemon should request a domain from relay for DNS challenge
-    async fn should_request_domain_from_relay(&self) -> Result<bool> {
-        // Check if we have relay peers that support DNS challenge
-        if let Some(p2p_session) = &self.p2p_session {
-            // Check if any bootstrap peers support DNS challenge
-            for peer_addr_str in &self.config.p2p.bootstrap_peers {
-                if let Ok(peer_addr) = peer_addr_str.parse::<hellas_gate_core::GateAddr>() {
-                    // For now, assume relay peers support DNS challenge
-                    // TODO: Query peer capabilities
-                    info!(
-                        "Found potential relay peer with DNS challenge support: {}",
-                        peer_addr.id
-                    );
-                    return Ok(true);
+impl TlsForwardingProtocolHandler {
+    /// Handle a single P2P connection, accepting multiple streams
+    async fn handle_connection(
+        conn: iroh::endpoint::Connection,
+        context: TlsStreamContext,
+    ) -> crate::Result<()> {
+        info!("TLS FORWARDING: Starting connection handler for domain: {}", context.domain);
+        
+        // Loop to handle multiple streams on this connection
+        let mut conn = conn;
+        loop {
+            match conn.accept_bi().await {
+                Ok((send_stream, recv_stream)) => {
+                    info!("TLS FORWARDING: Accepted new bidirectional stream");
+                    
+                    // Spawn a task to handle this individual stream
+                    let context_clone = context.clone();
+                    
+                    tokio::spawn(async move {
+                        match context_clone.handle_stream(send_stream, recv_stream).await {
+                            Ok(()) => {},
+                            Err(e) => {
+                                let error_msg = format!("TLS forwarding stream failed: {}", e);
+                                warn!("{}", error_msg);
+                            }
+                        }
+                    });
+                }
+                Err(e) => {
+                    info!("TLS FORWARDING: Connection closed or no more streams: {}", e);
+                    break;
                 }
             }
         }
-
-        info!("No relay peers with DNS challenge support found");
-        Ok(false)
-    }
-
-    /// Request a domain from relay for DNS challenge
-    async fn request_domain_from_relay(
-        &self,
-        node_addr: &hellas_gate_core::GateAddr,
-    ) -> Result<Option<(String, hellas_gate_core::GateId)>> {
-        let p2p_session = self
-            .p2p_session
-            .as_ref()
-            .ok_or_else(|| DaemonError::Other(anyhow::anyhow!("P2P session not available")))?;
-
-        // Find a relay peer to request domain from
-        for peer_addr_str in &self.config.p2p.bootstrap_peers {
-            if let Ok(peer_addr) = peer_addr_str.parse::<hellas_gate_core::GateAddr>() {
-                info!("Requesting domain from relay peer: {}", peer_addr.id);
-
-                // Send domain registration request
-                match p2p_session
-                    .request_domain_registration(peer_addr.id, node_addr.clone())
-                    .await
-                {
-                    Ok(domain) => {
-                        info!("Successfully received domain from relay: {}", domain);
-                        return Ok(Some((domain, peer_addr.id)));
-                    }
-                    Err(e) => {
-                        warn!(
-                            "Failed to request domain from relay {}: {}",
-                            peer_addr.id, e
-                        );
-                        // Continue to next relay
-                    }
-                }
-            }
-        }
-
-        warn!("Failed to request domain from any relay peer");
-        Ok(None)
-    }
-
-    /// Start ACME certificate obtainment process for the given domain
-    async fn start_acme_certificate_process(
-        &mut self,
-        domain: &str,
-        relay_peer_id: hellas_gate_core::GateId,
-    ) -> Result<()> {
-        use crate::letsencrypt::{LetsEncryptConfig, LetsEncryptManager, P2PDnsChallengeResolver};
-
-        info!("Starting ACME certificate process for domain: {}", domain);
-
-        // Create LetsEncrypt configuration from daemon config
-        let cert_dir = self.state_dir.join("certs");
-        let letsencrypt_config = if let Some(ref config_le) = self.config.tls.letsencrypt {
-            LetsEncryptConfig {
-                cert_dir,
-                email: config_le.email.clone(),
-                staging: config_le.staging,
-                domains: vec![domain.to_string()],
-            }
-        } else {
-            // Fallback to default configuration if not specified
-            warn!("No LetsEncrypt configuration found in daemon config, using defaults");
-            LetsEncryptConfig {
-                cert_dir,
-                email: "admin@hellas.ai".to_string(),
-                staging: true,
-                domains: vec![domain.to_string()],
-            }
-        };
-
-        // Initialize LetsEncrypt manager
-        let mut letsencrypt_manager = LetsEncryptManager::new(letsencrypt_config).await?;
-        letsencrypt_manager.initialize_account().await?;
-
-        // Create P2P DNS challenge resolver using the same relay that provided the domain
-        let p2p_session = self
-            .p2p_session
-            .as_ref()
-            .ok_or_else(|| DaemonError::Other(anyhow::anyhow!("P2P session not available")))?;
-
-        let dns_resolver = P2PDnsChallengeResolver::new(p2p_session.clone(), relay_peer_id);
-
-        info!("Starting certificate request for domain: {}", domain);
-
-        // Request certificate with DNS challenge
-        match letsencrypt_manager
-            .request_certificate(std::sync::Arc::new(dns_resolver))
-            .await
-        {
-            Ok(()) => {
-                info!(
-                    "Successfully obtained ACME certificate for domain: {}",
-                    domain
-                );
-
-                // Reload TLS terminator with the new certificate
-                if let Err(e) = self.reload_tls_with_new_certificate().await {
-                    warn!(
-                        "Failed to reload TLS terminator with new certificate: {}",
-                        e
-                    );
-                } else {
-                    info!("TLS terminator reloaded with new certificate");
-                }
-            }
-            Err(e) => {
-                warn!("ACME certificate request failed: {}", e);
-                return Err(e);
-            }
-        }
-
+        
+        info!("TLS FORWARDING: Connection handler completed for domain: {}", context.domain);
         Ok(())
     }
 
-    /// Reload TLS terminator with new certificate from the certificate directory
-    async fn reload_tls_with_new_certificate(&mut self) -> Result<()> {
-        info!("Reloading TLS terminator with new certificate");
-
-        let cert_dir = self.state_dir.join("certs");
-        info!("ACME certificate should be available in: {:?}", cert_dir);
-
-        // TODO: Implement proper ACME certificate loading and TLS reload
-        // The current TLS system uses self-signed certificates with P2P keys
-        // We need to extend it to support loading ACME certificates from disk
-
-        // For now, just log that the certificate is ready for reload
-        info!("New ACME certificate is available and ready for TLS reload");
-        info!("TLS reload functionality needs to be implemented for ACME certificates");
-
-        // Check if certificate files exist
-        let cert_file = cert_dir.join("cert.pem");
-        let key_file = cert_dir.join("key.pem");
-
-        if cert_file.exists() && key_file.exists() {
-            info!(
-                "Certificate files found: {:?} and {:?}",
-                cert_file, key_file
-            );
-            info!("TLS terminator should be configured to use these files");
-        } else {
-            warn!("Certificate files not found in expected locations");
-        }
-
-        Ok(())
-    }
 }

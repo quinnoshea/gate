@@ -1,31 +1,38 @@
 use anyhow::Result;
 use std::path::PathBuf;
 use tracing::Level;
-use tracing_appender::rolling;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use std::fs::OpenOptions;
 
 /// Initialize logging for the CLI
 pub fn init_logging(log_level: Level, data_dir: Option<PathBuf>, component: &str) -> Result<()> {
     let is_long_running = matches!(component, "daemon" | "relay");
 
     if is_long_running {
-        // For daemon/relay commands - write to component-specific file
+        // For daemon/relay commands - write to .state/daemon.log or .state/relay.log
         init_file_logging(log_level, data_dir, component)
     } else {
-        // For CLI commands - write to cli log file
+        // For CLI commands - write to .state/cli.log
         init_file_logging(log_level, data_dir, "cli")
     }
 }
 
 fn init_file_logging(level: Level, data_dir: Option<PathBuf>, component: &str) -> Result<()> {
-    let logs_dir = get_logs_dir(data_dir, component)?;
-    std::fs::create_dir_all(&logs_dir)?;
+    let log_file_path = get_log_file_path(data_dir, component)?;
+    
+    // Ensure parent directory exists
+    if let Some(parent) = log_file_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    // Create/truncate the log file
+    let log_file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&log_file_path)?;
 
     let level_str = level.as_str().to_lowercase();
-
-    // Create file appender with daily rotation (blocking for guaranteed writes)
-    // Files will be named YYYY-MM-DD in the logs directory
-    let file_appender = rolling::daily(&logs_dir, "");
 
     tracing_subscriber::registry()
         .with(
@@ -35,7 +42,7 @@ fn init_file_logging(level: Level, data_dir: Option<PathBuf>, component: &str) -
         )
         .with(
             tracing_subscriber::fmt::layer()
-                .with_writer(file_appender)
+                .with_writer(log_file)
                 .with_ansi(false) // No color codes in files
         )
         .with(
@@ -47,7 +54,7 @@ fn init_file_logging(level: Level, data_dir: Option<PathBuf>, component: &str) -
     Ok(())
 }
 
-fn get_logs_dir(data_dir: Option<PathBuf>, component: &str) -> Result<PathBuf> {
+fn get_log_file_path(data_dir: Option<PathBuf>, component: &str) -> Result<PathBuf> {
     let base_dir = data_dir.unwrap_or_else(|| {
         // Check environment variable first, then fall back to system data dir
         if let Ok(gate_data_dir) = std::env::var("GATE_STATE_DIR") {
@@ -59,5 +66,6 @@ fn get_logs_dir(data_dir: Option<PathBuf>, component: &str) -> Result<PathBuf> {
         }
     });
 
-    Ok(base_dir.join(component).join("logs"))
+    let log_filename = format!("{}.log", component);
+    Ok(base_dir.join(log_filename))
 }

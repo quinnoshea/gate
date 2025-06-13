@@ -1,0 +1,60 @@
+syntax = "proto3";
+package gate.common.v1;
+
+import "common/v1/types.proto";
+import "common/v1/errors.proto";
+
+// Node role in the Gate network
+enum NodeRole {
+  DAEMON = 0;   // Provides inference and may support relay
+  RELAY = 1;    // Provides relay services
+  CLIENT = 2;   // Client-only node (future use)
+}
+
+// Peer capabilities for session establishment
+message PeerCapabilities {
+  repeated string supported_protocols = 1;  // ALPN identifiers
+  string version = 2;                       // Gate software version
+  NodeRole role = 3;                        // Node role
+  map<string, string> features = 4;         // Feature flags and metadata
+}
+
+// Session establishment request
+message SessionRequest {
+  GateId peer_id = 1;
+  PeerCapabilities capabilities = 2;
+  map<string, string> metadata = 3;         // Additional session metadata
+}
+
+// Session establishment response
+message SessionResponse {
+  oneof result {
+    SessionOk ok = 1;
+    Error error = 2;
+  }
+  
+  message SessionOk {
+    string session_id = 1;
+    PeerCapabilities server_capabilities = 2;
+    SessionConfig config = 3;
+  }
+}
+
+// Session configuration parameters
+message SessionConfig {
+  uint32 heartbeat_interval_seconds = 1;    // How often to send heartbeats
+  uint32 max_idle_seconds = 2;              // Max time before session timeout
+  uint32 max_concurrent_requests = 3;       // Max concurrent requests per session
+  uint32 request_timeout_seconds = 4;       // Default request timeout
+}
+
+// Connection context for observability and tracing
+message ConnectionContext {
+  string connection_id = 1;      // Iroh Connection ID
+  string stream_id = 2;          // Iroh Stream ID
+  string session_id = 3;         // Gate session ID
+  GateId peer_id = 4;           // Remote peer ID
+  string protocol = 5;          // ALPN protocol identifier
+  int64 timestamp = 6;          // Connection establishment time
+  map<string, string> tags = 7; // Additional context tags
+}

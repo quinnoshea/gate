@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "crates/core",
-    "crates/p2p",
+    "crates/proto",
     "crates/daemon",
     "crates/cli",
     "crates/relay",
@@ -19,16 +19,49 @@ categories = ["network-programming", "cryptography"]
 
 [workspace.dependencies]
 # Core dependencies used across crates
-iroh = "0.35.0"
+iroh = { git = "https://github.com/n0-computer/iroh.git", branch = "main", features = ["discovery-local-network"] }
 tokio = { version = "1.0", features = ["full"] }
 tokio-util = "0.7"
 futures = "0.3"
 tracing = "0.1"
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 anyhow = "1.0"
-thiserror = "1.0"
+thiserror = "2.0"
 rand = "0.8"
 hex = "0.4"
+dashmap = "6.1"
+
+# Protobuf dependencies
+prost = "0.13"
+prost-types = "0.13"
+tokio-stream = "0.1"
+
+# Common utilities
+config = "0.14"
+url = "2.5"
+uuid = { version = "1.0", features = ["v4"] }
+bytes = "1.0"
+
+# HTTP/TLS (standardize on latest versions)
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+rustls = { version = "0.23", features = ["ring"] }
+tokio-rustls = "0.26"
+webpki-roots = "1.0"
+
+# Build/dev tools
+rcgen = "0.13"
+
+# External transport
+tonic-iroh-transport = { path = "../tonic-iroh" }
+tonic = "0.13"
+tonic-build = "0.13"
+
+# Local workspace crates
+hellas-gate-core = { path = "crates/core" }
+hellas-gate-proto = { path = "crates/proto" }
+hellas-gate-daemon = { path = "crates/daemon" }
+hellas-gate-relay = { path = "crates/relay" }
 
 [workspace.lints.clippy]
 all = "warn"

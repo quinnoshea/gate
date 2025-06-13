@@ -167,7 +167,7 @@ let daemon = GateDaemon::new(config, identity)?;
 
 - `axum` - HTTP server framework
 - `tokio-rustls` - TLS implementation
-- `acme-lib` - ACME protocol client
+- `instant-acme` - ACME protocol client
 - `reqwest` - HTTP client for upstream providers
 - `hellas-gate-p2p` - P2P networking
 - `rcgen` - Self-signed certificate generation

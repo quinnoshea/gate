@@ -16,8 +16,40 @@
         };
 
         rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+
+        gatePackage = pkgs.rustPlatform.buildRustPackage {
+          pname = "hellas-gate-cli";
+          version = "0.1.0";
+          
+          src = pkgs.lib.cleanSource ./.;
+          
+          cargoLock = {
+            lockFile = ./Cargo.lock;
+          };
+
+          buildInputs = with pkgs; [
+            openssl
+          ];
+          
+          nativeBuildInputs = with pkgs; [
+            pkg-config
+            protobuf
+            rustToolchain
+          ];
+
+          cargoBuildFlags = [ "--package" "gate" ];
+        };
       in
       {
+        packages = {
+          default = gatePackage;
+          gate = gatePackage;
+        };
+
+        checks = {
+          gate = gatePackage;
+        };
+
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
             rustToolchain
@@ -25,6 +57,10 @@
             pkg-config
             gh
             pre-commit
+            cargo-expand
+            cargo-udeps
+            cargo-outdated
+            protobuf
           ];
 
           RUST_LOG = "info";

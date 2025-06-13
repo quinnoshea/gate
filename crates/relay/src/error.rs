@@ -5,13 +5,13 @@ pub type Result<T> = std::result::Result<T, RelayError>;
 #[derive(Error, Debug)]
 pub enum RelayError {
     #[error("Network error: {0}")]
-    Network(#[from] std::io::Error),
+    Network(String),
 
     #[error("TLS error: {0}")]
     Tls(#[from] rustls::Error),
 
     #[error("P2P error: {0}")]
-    P2P(#[from] hellas_gate_p2p::error::P2PError),
+    P2P(String),
 
     #[error("Protocol error: {0}")]
     Protocol(String),
@@ -25,8 +25,11 @@ pub enum RelayError {
     #[error("SNI extraction failed: {0}")]
     SniExtraction(String),
 
-    #[error("Node not found: {node_id}")]
-    NodeNotFound { node_id: String },
+    #[error("Node not found: {0}")]
+    NodeNotFound(String),
+
+    #[error("No idle connection available: {0}")]
+    NoIdleConnection(String),
 
     #[error("Invalid domain: {domain}")]
     InvalidDomain { domain: String },

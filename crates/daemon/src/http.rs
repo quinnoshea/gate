@@ -11,12 +11,12 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use hellas_gate_p2p::GateId;
+use hellas_gate_core::GateId;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tower::ServiceBuilder;
+use tower::{ServiceBuilder, ServiceExt};
 use tower_http::{cors::CorsLayer, timeout::TimeoutLayer, trace::TraceLayer};
 use tracing::{info, warn};
 
@@ -84,6 +84,58 @@ impl HttpServer {
         Ok(())
     }
 
+    /// Handle a stream connection directly (for TLS bridge connections)
+    pub async fn handle_stream<S>(&self, stream: S) -> Result<()>
+    where
+        S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Unpin + 'static,
+    {
+        self.handle_stream_with_p2p_info(stream, None).await
+    }
+
+    /// Handle a stream connection with P2P connection information
+    pub async fn handle_stream_with_p2p_info<S>(
+        &self,
+        stream: S,
+        p2p_info: Option<crate::daemon::P2pConnectionInfo>,
+    ) -> Result<()>
+    where
+        S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Unpin + 'static,
+    {
+        let mut app = self.create_app();
+        
+        // Add P2P connection info as extension if provided
+        if let Some(p2p_info) = p2p_info {
+            info!("Handling P2P stream connection from node: {:?}", p2p_info.connection.remote_node_id());
+            app = app.layer(axum::Extension(p2p_info));
+        } else {
+            info!("Handling direct stream connection");
+        }
+        
+        // Wrap tokio stream for hyper compatibility
+        let io = hyper_util::rt::TokioIo::new(stream);
+        
+        // Use hyper directly to handle the stream
+        let service = hyper::service::service_fn(move |req| {
+            let app = app.clone();
+            async move {
+                app.oneshot(req).await.map_err(|e| {
+                    std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
+                })
+            }
+        });
+
+        if let Err(e) = hyper::server::conn::http1::Builder::new()
+            .serve_connection(io, service)
+            .await
+        {
+            warn!("Stream connection error: {}", e);
+            return Err(DaemonError::Http(format!("Stream connection failed: {e}")));
+        }
+
+        info!("Stream connection completed successfully");
+        Ok(())
+    }
+
     /// Shutdown the HTTP server
     ///
     /// # Errors
@@ -97,34 +149,55 @@ impl HttpServer {
 
     /// Create the Axum application with routes
     fn create_app(&self) -> Router {
-        let mut app = Router::new()
-            // Health check
-            .route("/health", get(health_check))
-            // Node status
-            .route("/status", get(node_status))
-            // Inference API (OpenAI-compatible)
-            .route("/v1/chat/completions", post(chat_completions))
-            // Node management
-            .route("/peers", get(list_peers))
-            .route("/peers/:peer_id/connect", post(connect_peer))
-            .with_state(self.app_state.clone());
-
-        // Add middleware
-        let service_builder = ServiceBuilder::new()
-            .layer(TraceLayer::new_for_http())
-            .layer(TimeoutLayer::new(std::time::Duration::from_secs(
-                self.config.timeout_secs,
-            )));
-
-        app = app.layer(service_builder);
-
-        // Add CORS if enabled
-        if self.config.cors_enabled {
-            app = app.layer(CorsLayer::permissive());
-        }
-
-        app
+        create_router_with_config(&self.app_state, &self.config)
     }
+}
+
+/// Create an Axum router with all routes and middleware
+/// This function can be used by both the HTTP server and P2P TLS handler
+pub fn create_router_with_config(app_state: &AppState, config: &HttpConfig) -> Router {
+    let mut app = Router::new()
+        // Health check
+        .route("/health", get(health_check))
+        // Node status
+        .route("/status", get(node_status))
+        // Inference API (OpenAI-compatible)
+        .route("/v1/chat/completions", post(chat_completions))
+        // Node management
+        .route("/peers", get(list_peers))
+        .route("/peers/:peer_id/connect", post(connect_peer))
+        .with_state(app_state.clone());
+
+    // Add middleware
+    let service_builder = ServiceBuilder::new()
+        .layer(TraceLayer::new_for_http())
+        .layer(TimeoutLayer::new(std::time::Duration::from_secs(
+            config.timeout_secs,
+        )));
+
+    app = app.layer(service_builder);
+
+    // Add CORS if enabled
+    if config.cors_enabled {
+        app = app.layer(CorsLayer::permissive());
+    }
+
+    app
+}
+
+/// Create a simple router for P2P TLS connections (without timeout/CORS middleware)
+pub fn create_simple_router(app_state: &AppState) -> Router {
+    Router::new()
+        // Health check
+        .route("/health", get(health_check))
+        // Node status
+        .route("/status", get(node_status))
+        // Inference API (OpenAI-compatible)
+        .route("/v1/chat/completions", post(chat_completions))
+        // Node management
+        .route("/peers", get(list_peers))
+        .route("/peers/:peer_id/connect", post(connect_peer))
+        .with_state(app_state.clone())
 }
 
 /// Health check endpoint

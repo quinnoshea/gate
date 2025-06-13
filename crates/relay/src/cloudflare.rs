@@ -1,12 +1,12 @@
 use crate::error::{RelayError, Result};
-use hellas_gate_core::GateId;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tracing::{debug, info, warn};
 
-/// Manages DNS records via Cloudflare API for automatic subdomain provisioning
-pub struct DnsManager {
+/// Manages DNS records via Cloudflare API for ACME challenges
+#[derive(Debug)]
+pub struct CloudflareDnsManager {
     client: Client,
     api_token: String,
     zone_id: String,
@@ -27,7 +27,6 @@ struct CloudflareRecord {
 struct CloudflareResponse<T> {
     success: bool,
     errors: Vec<CloudflareError>,
-    messages: Vec<String>,
     result: Option<T>,
 }
 
@@ -37,7 +36,7 @@ struct CloudflareError {
     message: String,
 }
 
-impl DnsManager {
+impl CloudflareDnsManager {
     /// Create a new DNS manager
     pub async fn new() -> Result<Self> {
         // Load configuration from environment or config file
@@ -75,48 +74,10 @@ impl DnsManager {
         Ok(manager)
     }
 
-    /// Provision a subdomain for a Gate node using relay's public addresses
-    pub async fn provision_subdomain(
-        &self,
-        node_id: GateId,
-        relay_addresses: &[std::net::IpAddr],
-    ) -> Result<String> {
-        let node_id_hex = hex::encode(node_id.as_bytes());
-        let subdomain = format!("{}.{}", node_id_hex, self.base_domain);
-
-        info!(
-            "Provisioning subdomain: {} with {} addresses",
-            subdomain,
-            relay_addresses.len()
-        );
-
-        // Create A/AAAA records for all relay addresses
-        for ip in relay_addresses {
-            let record_type = match ip {
-                std::net::IpAddr::V4(_) => "A",
-                std::net::IpAddr::V6(_) => "AAAA",
-            };
-
-            let record = CloudflareRecord {
-                id: None,
-                r#type: record_type.to_string(),
-                name: subdomain.clone(),
-                content: ip.to_string(),
-                ttl: 300,             // 5 minute TTL for faster updates
-                proxied: Some(false), // Direct connection, not proxied through Cloudflare
-            };
-
-            self.create_dns_record(record).await?;
-            info!("Created {} record for {}: {}", record_type, subdomain, ip);
-        }
-
-        info!("Successfully provisioned subdomain: {}", subdomain);
-        Ok(subdomain)
-    }
 
     /// Create a DNS challenge record for Let's Encrypt ACME
     pub async fn create_dns_challenge(&self, domain: &str, token: &str) -> Result<String> {
-        let challenge_name = format!("_acme-challenge.{}", domain);
+        let challenge_name = domain.to_string();
 
         debug!(
             "Creating DNS challenge record: {} = {}",
@@ -134,13 +95,11 @@ impl DnsManager {
 
         let record_id = self.create_dns_record(record).await?;
 
-        // Wait for DNS propagation
-        self.wait_for_dns_propagation(domain, token).await?;
-
+        // Return immediately after record creation
         Ok(record_id)
     }
 
-    /// Remove DNS challenge record after ACME validation
+    /// Remove DNS challenge record after ACME validation by record ID
     pub async fn cleanup_dns_challenge(&self, record_id: &str) -> Result<()> {
         debug!("Cleaning up DNS challenge record: {}", record_id);
 
@@ -169,25 +128,30 @@ impl DnsManager {
         Ok(())
     }
 
-    /// Remove all DNS records for a subdomain
-    pub async fn cleanup_subdomain(&self, domain: &str) -> Result<()> {
-        info!("Cleaning up subdomain: {}", domain);
+    /// Remove DNS challenge record by domain name
+    pub async fn cleanup_dns_challenge_by_domain(&self, domain: &str) -> Result<()> {
+        let challenge_name = domain.to_string();
+        info!("Cleaning up DNS challenge record for domain: {}", challenge_name);
 
-        // List all records for this domain
-        let records = self.list_dns_records(Some(domain)).await?;
+        // List records to find the challenge record
+        let records = self.list_dns_records(Some(&challenge_name)).await?;
 
-        // Delete each record
+        // Delete any TXT records for the challenge
         for record in records {
-            if let Some(record_id) = record.id {
-                if let Err(e) = self.delete_dns_record(&record_id).await {
-                    warn!("Failed to delete DNS record {}: {}", record_id, e);
+            if record.r#type == "TXT" && record.name == challenge_name {
+                if let Some(record_id) = record.id {
+                    if let Err(e) = self.cleanup_dns_challenge(&record_id).await {
+                        warn!("Failed to delete challenge record {}: {}", record_id, e);
+                    } else {
+                        info!("Successfully cleaned up challenge record for {}", domain);
+                    }
                 }
             }
         }
 
-        info!("Successfully cleaned up subdomain: {}", domain);
         Ok(())
     }
+
 
     /// Verify API token has necessary permissions
     async fn verify_api_access(&self) -> Result<()> {
@@ -346,51 +310,32 @@ impl DnsManager {
         Ok(())
     }
 
-    /// Wait for DNS propagation using multiple resolvers
-    async fn wait_for_dns_propagation(&self, domain: &str, expected_value: &str) -> Result<()> {
+    /// Check DNS propagation status (non-blocking, single check)
+    pub async fn check_dns_propagation(&self, domain: &str, expected_value: &str) -> Result<bool> {
         use trust_dns_resolver::{config::*, AsyncResolver};
 
         // Use Cloudflare's DNS over TLS for faster resolution
         let resolver = AsyncResolver::tokio(ResolverConfig::cloudflare(), ResolverOpts::default());
 
-        let challenge_name = format!("_acme-challenge.{}", domain);
-        let mut attempts = 0;
-        const MAX_ATTEMPTS: u32 = 30; // 5 minutes with 10 second intervals
+        let challenge_name = domain.to_string();
 
-        while attempts < MAX_ATTEMPTS {
-            debug!(
-                "Checking DNS propagation for {} (attempt {})",
-                challenge_name,
-                attempts + 1
-            );
+        debug!("Checking DNS propagation for {}", challenge_name);
 
-            match resolver.txt_lookup(&challenge_name).await {
-                Ok(response) => {
-                    for record in response.iter() {
-                        if record.to_string().trim_matches('"') == expected_value {
-                            info!("DNS propagation confirmed for {}", challenge_name);
-                            return Ok(());
-                        }
+        match resolver.txt_lookup(&challenge_name).await {
+            Ok(response) => {
+                for record in response.iter() {
+                    if record.to_string().trim_matches('"') == expected_value {
+                        debug!("DNS propagation confirmed for {}", challenge_name);
+                        return Ok(true);
                     }
                 }
-                Err(e) => {
-                    debug!("DNS lookup failed: {}", e);
-                }
+                debug!("DNS record found but value doesn't match for {}", challenge_name);
+                Ok(false)
             }
-
-            attempts += 1;
-            if attempts < MAX_ATTEMPTS {
-                tokio::time::sleep(Duration::from_secs(10)).await;
+            Err(e) => {
+                debug!("DNS lookup failed for {}: {}", challenge_name, e);
+                Ok(false)
             }
         }
-
-        Err(RelayError::Timeout {
-            operation: format!("DNS propagation for {}", challenge_name),
-        })
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
 }

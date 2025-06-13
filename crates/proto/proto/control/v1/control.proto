@@ -1,0 +1,57 @@
+syntax = "proto3";
+package gate.control.v1;
+
+import "common/v1/session.proto";
+
+// Control protocol - ALL nodes must implement this
+// This is the foundational protocol for session management
+service ControlService {
+  // Session establishment (must be first call)
+  rpc EstablishSession(gate.common.v1.SessionRequest) returns (gate.common.v1.SessionResponse);
+  
+  // Basic connectivity test
+  rpc Ping(PingRequest) returns (PingResponse);
+  
+  // Get peer capabilities
+  rpc GetCapabilities(CapabilitiesRequest) returns (CapabilitiesResponse);
+  
+  // Graceful session close
+  rpc CloseSession(CloseSessionRequest) returns (CloseSessionResponse);
+}
+
+// Ping request/response for connectivity testing
+message PingRequest {
+  int64 timestamp = 1;
+  bytes nonce = 2;  // 8 random bytes for verification
+}
+
+message PingResponse {
+  int64 timestamp = 1;              // Echo of request timestamp
+  bytes nonce = 2;                  // Echo of request nonce
+  int64 server_timestamp = 3;       // Server's current timestamp
+}
+
+// Capabilities request/response
+message CapabilitiesRequest {}
+
+message CapabilitiesResponse {
+  gate.common.v1.PeerCapabilities capabilities = 1;
+  repeated ProtocolInfo protocols = 2;
+  
+  message ProtocolInfo {
+    string alpn = 1;                // ALPN identifier
+    string version = 2;             // Protocol version
+    bool available = 3;             // Currently accepting connections
+    map<string, string> parameters = 4;  // Protocol-specific parameters
+  }
+}
+
+// Session close request/response
+message CloseSessionRequest {
+  string reason = 1;
+  bool graceful = 2;
+}
+
+message CloseSessionResponse {
+  bool acknowledged = 1;
+}

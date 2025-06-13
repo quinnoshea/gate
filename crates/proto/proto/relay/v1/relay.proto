@@ -1,0 +1,110 @@
+syntax = "proto3";
+package gate.relay.v1;
+
+import "common/v1/types.proto";
+import "common/v1/errors.proto";
+
+// Relay protocol for DNS challenges only
+service RelayService {
+  // DNS challenge creation with streaming progress
+  rpc CreateDnsChallenge(CreateDnsChallengeRequest)
+      returns (stream CreateDnsChallengeResponse);
+
+  // DNS challenge cleanup (unary since it's usually quick)
+  rpc CleanupDnsChallenge(CleanupDnsChallengeRequest)
+      returns (CleanupDnsChallengeResponse);
+
+  // Check DNS propagation with streaming progress
+  rpc CheckDnsPropagation(CheckDnsPropagationRequest)
+      returns (stream CheckDnsPropagationResponse);
+
+  // Get rate limiting information
+  rpc GetRateLimit(RateLimitRequest) returns (RateLimitResponse);
+}
+
+// DNS challenge operations
+message CreateDnsChallengeRequest {
+  string domain = 1;
+  string txt_value = 2;
+  int32 ttl_seconds = 3; // Optional TTL, default if 0
+}
+
+message CreateDnsChallengeResponse {
+  oneof response {
+    ChallengeProgress progress = 1;
+    ChallengeComplete complete = 2;
+    gate.common.v1.Error error = 3;
+  }
+
+  message ChallengeProgress {
+    string stage = 1; // "creating", "propagating", "verifying"
+    string message = 2;
+    int32 estimated_seconds_remaining = 3;
+  }
+
+  message ChallengeComplete {
+    string record_id = 1;
+    int32 propagation_estimate_seconds = 2;
+    bool verified = 3; // Whether challenge was verified
+  }
+}
+
+message CleanupDnsChallengeRequest {
+  string domain = 1;
+  string record_id = 2; // Optional - can cleanup by domain if not provided
+}
+
+message CleanupDnsChallengeResponse {
+  oneof result {
+    CleanupSuccess success = 1;
+    gate.common.v1.Error error = 2;
+  }
+
+  message CleanupSuccess { int32 records_removed = 1; }
+}
+
+// Rate limiting
+message RateLimitRequest {
+  string operation = 1; // "dns_challenge", etc.
+}
+
+message RateLimitResponse {
+  RateLimit rate_limit = 1;
+
+  message RateLimit {
+    uint32 max_concurrent = 1;    // Max concurrent operations per peer
+    uint32 current_count = 2;     // Current active operations
+    uint32 requests_per_hour = 3; // Hourly request limit
+    uint32 requests_used = 4;     // Requests used in current hour
+    int64 reset_timestamp = 5;    // When counter resets
+  }
+}
+
+// DNS propagation checking
+message CheckDnsPropagationRequest {
+  string domain = 1;
+  string expected_value = 2;
+  int32 timeout_seconds = 3; // Max time to wait, default 300 (5 min)
+}
+
+message CheckDnsPropagationResponse {
+  oneof response {
+    PropagationProgress progress = 1;
+    PropagationComplete complete = 2;
+    gate.common.v1.Error error = 3;
+  }
+
+  message PropagationProgress {
+    string stage = 1; // "checking", "waiting"
+    string message = 2;
+    int32 attempt = 3;            // Current attempt number
+    int32 max_attempts = 4;       // Total attempts before timeout
+    int32 next_check_seconds = 5; // Seconds until next check
+  }
+
+  message PropagationComplete {
+    bool propagated = 1;       // Whether DNS propagation was successful
+    int32 total_attempts = 2;  // How many attempts it took
+    int32 elapsed_seconds = 3; // Total time elapsed
+  }
+}

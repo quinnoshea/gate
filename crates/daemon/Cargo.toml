@@ -11,8 +11,14 @@ description = "Gate daemon for P2P AI inference network"
 
 [dependencies]
 # Workspace dependencies
-hellas-gate-core = { path = "../core" }
-hellas-gate-p2p = { path = "../p2p" }
+hellas-gate-core = { workspace = true }
+hellas-gate-proto = { workspace = true }
+hellas-gate-relay = { workspace = true }
+
+# P2P networking via tonic-iroh
+tonic-iroh-transport = { workspace = true }
+
+iroh = { workspace = true }
 
 tokio = { workspace = true }
 tokio-util = { workspace = true }
@@ -22,29 +28,31 @@ serde = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 
+# RPC framework dependencies
+tonic = { workspace = true }
+tokio-stream = { version = "0.1", default-features = false, features = ["sync"] }
+
 # HTTP server
 axum = "0.7"
 tower = "0.4"
 tower-http = { version = "0.5", features = ["cors", "trace", "timeout"] }
 hyper = "1.0"
+hyper-util = { version = "0.1", features = ["tokio"] }
 
 # Configuration
-config = "0.14"
-serde_json = "1.0"
-serde_yaml = "0.9"
+config = { workspace = true }
+serde_json = { workspace = true }
 
 # HTTP client for upstream providers
-reqwest = { version = "0.11", features = ["json", "stream"] }
+reqwest = { workspace = true, features = ["stream"] }
 
 # TLS certificate generation and handling
-rustls = "0.23"
-rustls-pemfile = "2.0"
-rcgen = "0.12"
-tokio-rustls = "0.25"
+rustls = { workspace = true }
+rcgen = { workspace = true }
+tokio-rustls = { workspace = true }
 
 # ACME/LetsEncrypt support
-acme-lib = "0.9"
-openssl = "0.10"
+instant-acme = { git = "https://github.com/djc/instant-acme.git" }
 
 # Time handling
 chrono = { version = "0.4", features = ["serde"] }
@@ -52,13 +60,13 @@ time = "0.3"
 
 # Cryptography
 sha2 = "0.10"
-hex = "0.4"
-
-# System utilities
-dirs = "5.0"
+hex = { workspace = true }
+base64 = "0.22"
+n0-watcher = "*"
 
 [dev-dependencies]
-test-log = "0.2"
+tempfile = "3.8"
+rand = "0.8"
 
 [features]
 default = []

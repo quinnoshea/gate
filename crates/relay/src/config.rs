@@ -82,8 +82,8 @@ impl Default for P2PConfig {
     fn default() -> Self {
         Self {
             identity_file: None,
-            port: 41146,              // Default relay P2P port
-            discovery_enabled: false, // Relays typically don't need discovery
+            port: 41146,
+            discovery_enabled: false,
         }
     }
 }

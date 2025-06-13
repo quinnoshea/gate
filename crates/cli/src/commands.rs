@@ -2,12 +2,11 @@
 
 use anyhow::Result;
 use clap::Subcommand;
-use hellas_gate_daemon::{DaemonConfig, GateDaemon};
-use hellas_gate_p2p::P2PSession;
+use hellas_gate_daemon::GateDaemon;
 use hellas_gate_relay::RelayServer;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::config;
 
@@ -43,19 +42,19 @@ pub enum Commands {
         config: Option<PathBuf>,
     },
 
-    /// P2P networking commands
-    P2p {
-        /// Peer address to connect to (defaults to .peer_id file)
-        #[arg(long)]
-        peer: Option<String>,
+    /// P2P networking commands (temporarily disabled during tonic-iroh migration)
+    // P2p {
+    //     /// Peer address to connect to (defaults to .peer_id file)
+    //     #[arg(long)]
+    //     peer: Option<String>,
 
-        /// Private key file for identity (defaults to daemon's identity)
-        #[arg(long)]
-        identity: Option<PathBuf>,
+    //     /// Private key file for identity (defaults to daemon's identity)
+    //     #[arg(long)]
+    //     identity: Option<PathBuf>,
 
-        #[command(subcommand)]
-        command: P2PCommands,
-    },
+    //     #[command(subcommand)]
+    //     command: P2PCommands,
+    // },
 
     /// Start the relay server
     Relay {
@@ -96,28 +95,36 @@ pub enum ConfigCommands {
     },
 }
 
-#[derive(Subcommand)]
-pub enum P2PCommands {
-    /// Connect to a peer and send an inference request
-    Inference {
-        /// Model name
-        #[arg(long)]
-        model: String,
+// Temporarily disabled during tonic-iroh migration
+// #[derive(Subcommand)]
+// pub enum P2PCommands {
+//     /// Connect to a peer and send an inference request
+//     Inference {
+//         /// Model name
+//         #[arg(long)]
+//         model: String,
 
-        /// User message
-        #[arg(long)]
-        message: String,
-    },
+//         /// User message
+//         #[arg(long)]
+//         message: String,
+//     },
 
-    /// List available models from a remote peer
-    ListModels,
+//     /// List available models from a remote peer
+//     ListModels,
 
-    /// Show node information
-    Info,
+//     /// Show node information
+//     Info,
 
-    /// List connected peers
-    Peers,
-}
+//     /// List connected peers
+//     Peers,
+
+//     /// Test P2P protocol connection
+//     TestConnection {
+//         /// Protocol to test (inference, relay, control)
+//         #[arg(long, default_value = "inference")]
+//         protocol: String,
+//     },
+// }
 
 #[derive(Subcommand)]
 pub enum CertCommands {
@@ -164,11 +171,11 @@ impl Commands {
 
         match self {
             Commands::Daemon { config } => start_daemon(config, data_dir).await,
-            Commands::P2p {
-                peer,
-                identity,
-                command,
-            } => command.execute(peer, identity, data_dir).await,
+            // Commands::P2p {
+            //     peer,
+            //     identity,
+            //     command,
+            // } => command.execute(peer, identity, data_dir).await,
             Commands::Relay { bind, p2p_bind } => start_relay(bind, p2p_bind, data_dir).await,
             Commands::Config { command } => command.execute(data_dir).await,
             Commands::Cert { command } => command.execute(data_dir).await,
@@ -235,33 +242,38 @@ impl CertCommands {
     }
 }
 
-impl P2PCommands {
-    pub async fn execute(
-        self,
-        peer: Option<String>,
-        identity: Option<PathBuf>,
-        state_dir: PathBuf,
-    ) -> Result<()> {
-        // Create shared P2P session
-        let session = create_p2p_session(identity, state_dir.clone()).await?;
-        let node_id = session.node_id();
-        info!("Started P2P session with node ID: {node_id}");
+// Temporarily disabled during tonic-iroh migration
+// impl P2PCommands {
+//     pub async fn execute(
+//         self,
+//         peer: Option<String>,
+//         identity: Option<PathBuf>,
+//         state_dir: PathBuf,
+//     ) -> Result<()> {
+//         // Create shared P2P session
+//         let session = create_p2p_session(identity, state_dir.clone()).await?;
+//         let node_id = session.node_id();
+//         info!("Started P2P session with node ID: {node_id}");
 
-        // Execute specific command with the session
-        match self {
-            P2PCommands::Inference { model, message } => {
-                let peer_addr = resolve_peer_address(peer, &state_dir).await?;
-                send_inference_with_session(session, peer_addr, model, message).await
-            }
-            P2PCommands::ListModels => {
-                let peer_addr = resolve_peer_address(peer, &state_dir).await?;
-                list_models_with_session(session, peer_addr).await
-            }
-            P2PCommands::Info => show_info_with_session(session).await,
-            P2PCommands::Peers => list_peers_with_session(session).await,
-        }
-    }
-}
+//         // Execute specific command with the session
+//         match self {
+//             P2PCommands::Inference { model, message } => {
+//                 let peer_addr = resolve_peer_address(peer, &state_dir).await?;
+//                 send_inference_with_session(session, peer_addr, model, message).await
+//             }
+//             P2PCommands::ListModels => {
+//                 let peer_addr = resolve_peer_address(peer, &state_dir).await?;
+//                 list_models_with_session(session, peer_addr).await
+//             }
+//             P2PCommands::Info => show_info_with_session(session).await,
+//             P2PCommands::Peers => list_peers_with_session(session).await,
+//             P2PCommands::TestConnection { protocol } => {
+//                 let peer_addr = resolve_peer_address(peer, &state_dir).await?;
+//                 test_connection_with_session(session, peer_addr, protocol).await
+//             }
+//         }
+//     }
+// }
 
 async fn start_daemon(config_file: Option<PathBuf>, data_dir: PathBuf) -> Result<()> {
     info!("Starting Gate daemon");
@@ -291,15 +303,17 @@ async fn start_daemon(config_file: Option<PathBuf>, data_dir: PathBuf) -> Result
         }
     };
 
-    let mut daemon = GateDaemon::new(config, identity, daemon_dir.clone())?;
-
+    // Create daemon (this fully initializes and starts background services)
+    let daemon = GateDaemon::new(config, identity, daemon_dir.clone()).await?;
+    
     // Write peer address file for relay discovery
-    let node_addr = daemon.run().await?;
+    let node_addr = daemon.node_addr().await?;
     let peer_addr_file = daemon_dir.join("peer_addr");
     std::fs::write(&peer_addr_file, node_addr.to_string())?;
     info!("Saved peer address to: {:?}", peer_addr_file);
 
-    Ok(())
+    // Wait for daemon shutdown (this blocks until shutdown)
+    daemon.wait_for_shutdown().await.map_err(|e| anyhow::anyhow!("Daemon error: {}", e))
 }
 
 /// Resolve peer address from CLI argument or daemon peer_addr file
@@ -323,106 +337,106 @@ async fn resolve_peer_address(peer: Option<String>, data_dir: &PathBuf) -> Resul
     }
 }
 
-/// Create a P2P session with shared identity logic
-async fn create_p2p_session(
-    identity_file: Option<PathBuf>,
-    data_dir: PathBuf,
-) -> Result<P2PSession> {
-    let mut builder = P2PSession::builder();
+// Temporarily disabled during tonic-iroh migration
+// /// Create a P2P session with shared identity logic
+// async fn create_p2p_session(
+//     identity_file: Option<PathBuf>,
+//     data_dir: PathBuf,
+// ) -> Result<P2PTransport> {
+//     let mut builder = P2PTransport::builder();
 
-    // Determine identity to use
-    let identity = if let Some(provided_path) = identity_file {
-        if provided_path.exists() {
-            let key_data = std::fs::read(&provided_path)?;
-            info!("Loaded identity from: {:?}", provided_path);
-            key_data
-        } else {
-            return Err(anyhow::anyhow!(
-                "Identity file not found at {:?}",
-                provided_path
-            ));
-        }
-    } else {
-        // Use CLI component identity
-        let cli_dir = data_dir.join("cli");
-        load_or_generate_identity(&cli_dir)?
-    };
+//     // Determine identity to use
+//     let identity = if let Some(provided_path) = identity_file {
+//         if provided_path.exists() {
+//             let key_data = std::fs::read(&provided_path)?;
+//             info!("Loaded identity from: {:?}", provided_path);
+//             key_data
+//         } else {
+//             return Err(anyhow::anyhow!(
+//                 "Identity file not found at {:?}",
+//                 provided_path
+//             ));
+//         }
+//     } else {
+//         // Use CLI component identity
+//         let cli_dir = data_dir.join("cli");
+//         load_or_generate_identity(&cli_dir)?
+//     };
 
-    builder = builder.with_private_key(&identity)?;
+//     builder = builder.with_private_key(&identity)?;
 
-    builder
-        .build()
-        .await
-        .map_err(|e| anyhow::anyhow!("P2P session build failed: {e}"))
-}
+//     builder
+//         .build()
+//         .await
+//         .map_err(|e| anyhow::anyhow!("P2P session build failed: {e}"))
+// }
 
-async fn send_inference_with_session(
-    session: P2PSession,
-    peer_addr: String,
-    model: String,
-    message: String,
-) -> Result<()> {
-    info!("Sending inference request to peer: {peer_addr}");
+// async fn send_inference_with_session(
+//     session: P2PTransport,
+//     peer_addr: String,
+//     model: String,
+//     message: String,
+// ) -> Result<()> {
+//     info!("Sending inference request to peer: {peer_addr}");
 
-    // Parse and add peer
-    let gate_addr: hellas_gate_core::GateAddr =
-        peer_addr.parse().expect("Invalid peer address format");
-    let connection_handle = session.add_peer(gate_addr).await?;
-    let peer_id = connection_handle.wait_connected().await?;
-    info!("Connected to peer: {peer_id}");
+//     // Parse and add peer
+//     let gate_addr: hellas_gate_core::GateAddr =
+//         peer_addr.parse().expect("Invalid peer address format");
+//     let connection_handle = session.connect_peer(&gate_addr, hellas_gate_proto::INFERENCE_PROTOCOL_V1)?;
+//     let peer_id = connection_handle.wait_connected().await?;
+//     info!("Connected to peer: {peer_id}");
 
-    // TODO: Implement inference request with new streaming API
-    println!("Connected to peer successfully!");
-    println!("Model: {}, Message: {}", model, message);
+//     // TODO: Implement inference request with new streaming API
+//     println!("Connected to peer successfully!");
+//     println!("Model: {}, Message: {}", model, message);
 
-    Ok(())
-}
+//     Ok(())
+// }
 
-async fn show_info_with_session(session: P2PSession) -> Result<()> {
-    info!("Getting node information");
+// async fn show_info_with_session(session: P2PTransport) -> Result<()> {
+//     info!("Getting node information");
 
-    let node_id = session.node_id();
-    let node_addr = session.node_addr().await?;
+//     let node_id = session.node_id();
+//     let node_addr = session.node_addr().await?;
 
-    println!("Node ID: {node_id}");
-    println!("Node Address: {node_addr}");
+//     println!("Node ID: {node_id}");
+//     println!("Node Address: {node_addr}");
 
-    Ok(())
-}
+//     Ok(())
+// }
 
-async fn list_peers_with_session(session: P2PSession) -> Result<()> {
-    info!("Listing connected peers");
+// async fn list_peers_with_session(session: P2PTransport) -> Result<()> {
+//     info!("Listing connected peers");
 
-    let peers = session.list_peers().await;
+//     let node_id = session.node_id();
+//     let node_addr = session.node_addr().await?;
 
-    if peers.is_empty() {
-        println!("No connected peers");
-    } else {
-        println!("Connected peers:");
-        for peer in peers {
-            println!("  {peer}");
-        }
-    }
+//     println!("Local node information:");
+//     println!("  Node ID: {node_id}");
+//     println!("  Node Address: {node_addr}");
+//     println!();
+//     println!("Note: Peer listing not available with current P2P transport.");
+//     println!("Connected peers are managed by the underlying Iroh endpoint.");
 
-    Ok(())
-}
+//     Ok(())
+// }
 
-async fn list_models_with_session(session: P2PSession, peer_addr: String) -> Result<()> {
-    info!("Listing models from peer: {peer_addr}");
+// async fn list_models_with_session(session: P2PTransport, peer_addr: String) -> Result<()> {
+//     info!("Listing models from peer: {peer_addr}");
 
-    // Parse and add peer
-    let gate_addr: hellas_gate_core::GateAddr =
-        peer_addr.parse().expect("Invalid peer address format");
-    let connection_handle = session.add_peer(gate_addr).await?;
-    let peer_id = connection_handle.wait_connected().await?;
-    info!("Connected to peer: {peer_id}");
+//     // Parse and add peer
+//     let gate_addr: hellas_gate_core::GateAddr =
+//         peer_addr.parse().expect("Invalid peer address format");
+//     let connection_handle = session.connect_peer(&gate_addr, hellas_gate_proto::INFERENCE_PROTOCOL_V1)?;
+//     let peer_id = connection_handle.wait_connected().await?;
+//     info!("Connected to peer: {peer_id}");
 
-    // TODO: Implement model list request with new streaming API
-    println!("Connected to peer successfully!");
-    println!("List models functionality will be implemented with streaming API");
+//     // TODO: Implement model list request with new streaming API
+//     println!("Connected to peer successfully!");
+//     println!("List models functionality will be implemented with streaming API");
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 async fn start_relay(bind: SocketAddr, p2p_bind: SocketAddr, data_dir: PathBuf) -> Result<()> {
     info!("Starting Gate relay server");
@@ -457,18 +471,29 @@ async fn start_relay(bind: SocketAddr, p2p_bind: SocketAddr, data_dir: PathBuf) 
     // Override config with CLI arguments
     config.https.bind_addr = bind;
     config.p2p.port = p2p_bind.port();
+    
+    // Create secret key from identity
+    let key_array: [u8; 32] = identity[0..32]
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("Invalid identity key length"))?;
+    let secret_key = iroh::SecretKey::from_bytes(&key_array);
 
-    info!("HTTPS bind address: {}", config.https.bind_addr);
-    info!("P2P bind address: 0.0.0.0:{}", config.p2p.port);
+    // Create endpoint
+    let bind_addr = format!("0.0.0.0:{}", p2p_bind.port());
+    let endpoint = iroh::Endpoint::builder()
+        .secret_key(secret_key)
+        .bind_addr_v4(bind_addr.parse()?)
+        .relay_mode(iroh::RelayMode::Disabled)
+        .discovery_n0()
+        .discovery_local_network()
+        .bind()
+        .await?;
+
+    info!("P2P endpoint bound to port {}", p2p_bind.port());
 
     // Create and start relay server
-    let relay = RelayServer::new(config, identity).await?;
-
-    // Note: Do NOT auto-connect to local daemon
-    // The daemon should connect TO the relay as a bootstrap peer, not the other way around
-    // discover_and_add_local_daemon(&relay, &data_dir).await;
-
-    info!("Relay server starting on {}", bind);
+    let relay = RelayServer::new(config, endpoint).await?;
+    info!("Relay server starting");
 
     // Run until shutdown signal
     relay.run().await?;
@@ -477,49 +502,6 @@ async fn start_relay(bind: SocketAddr, p2p_bind: SocketAddr, data_dir: PathBuf) 
     Ok(())
 }
 
-async fn discover_and_add_local_daemon(relay: &RelayServer, data_dir: &PathBuf) {
-    info!("Looking for local Gate daemon...");
-
-    // Check daemon's data directory for peer info
-    let daemon_dir = data_dir.join("daemon");
-    let peer_id_file = daemon_dir.join("peer_addr");
-
-    if peer_id_file.exists() {
-        match std::fs::read_to_string(&peer_id_file) {
-            Ok(peer_addr) => {
-                let peer_addr = peer_addr.trim();
-                info!("Found local daemon peer address: {}", peer_addr);
-
-                // Extract node ID from peer address to generate proper domain
-                match peer_addr.parse::<hellas_gate_core::GateAddr>() {
-                    Ok(gate_addr) => {
-                        let node_id_hex = hex::encode(gate_addr.id.as_bytes());
-                        let domain = format!("{}.private.hellas.ai", node_id_hex);
-
-                        match relay.add_peer(peer_addr, domain.clone()).await {
-                            Ok(gate_id) => {
-                                info!("Successfully connected to local daemon: {}", gate_id);
-                                info!("Local daemon available at: {}", domain);
-                            }
-                            Err(e) => {
-                                warn!("Failed to connect to local daemon: {}", e);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        warn!("Failed to parse daemon peer address '{}': {}", peer_addr, e);
-                    }
-                }
-            }
-            Err(e) => {
-                warn!("Failed to read peer ID file: {}", e);
-            }
-        }
-    } else {
-        info!("No local daemon found (no .peer_id file)");
-        info!("Start a Gate daemon first, then start the relay to enable local testing");
-    }
-}
 
 async fn generate_certificate(
     node_id: Option<String>,
@@ -528,7 +510,7 @@ async fn generate_certificate(
     pem_only: bool,
     data_dir: PathBuf,
 ) -> Result<()> {
-    use hellas_gate_daemon::selfsigned::TlsCertManager;
+    use hellas_gate_daemon::certs::CertificateManager;
 
     // Load private key
     let identity_path = if let Some(path) = identity {
@@ -564,8 +546,32 @@ async fn generate_certificate(
 
     info!("Generating certificate for node ID: {}", node_id_hex);
 
-    // Generate certificate
-    let cert_manager = TlsCertManager::generate_self_signed(&node_id_hex, &private_key)
+    // Create a temporary endpoint for certificate generation
+    let secret_key = if private_key.len() == 32 {
+        let key_array: [u8; 32] = private_key[0..32]
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("Failed to convert key to array"))?;
+        iroh::SecretKey::from_bytes(&key_array)
+    } else {
+        anyhow::bail!("Private key must be 32 bytes, got {} bytes", private_key.len());
+    };
+    
+    let endpoint = iroh::Endpoint::builder()
+        .secret_key(secret_key)
+        .bind()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to create endpoint: {}", e))?;
+
+    // Create certificate manager and generate self-signed certificate
+    let cert_dir = data_dir.join("certificates");
+    let le_config = hellas_gate_daemon::LetsEncryptConfig::default();
+    let cert_manager = CertificateManager::new(le_config, endpoint, cert_dir).await
+        .map_err(|e| anyhow::anyhow!("Failed to create certificate manager: {}", e))?;
+    let domain = format!("{}.private.hellas.ai", &node_id_hex[..16]); // Use first 16 chars like daemon
+    
+    // Use the public API to get or create certificate (which will fall back to self-signed)
+    let cert_info = cert_manager.get_or_create_certificate(&domain, &node_id_hex, &private_key, None)
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to generate certificate: {}", e))?;
 
     // Determine output directory
@@ -580,26 +586,22 @@ async fn generate_certificate(
     if pem_only {
         // Just output PEM to stdout
         println!("=== CERTIFICATE PEM ===");
-        println!("{}", cert_manager.certificate_pem()?);
+        println!("{}", cert_info.cert_pem);
         println!("=== PRIVATE KEY PEM ===");
-        println!("{}", cert_manager.private_key_pem());
+        println!("{}", cert_info.key_pem);
     } else {
         // Save to files and show info
         let cert_file = output_dir.join(format!("{}.crt", node_id_hex));
         let key_file = output_dir.join(format!("{}.key", node_id_hex));
 
-        std::fs::write(&cert_file, cert_manager.certificate_pem()?)?;
-        std::fs::write(&key_file, cert_manager.private_key_pem())?;
+        std::fs::write(&cert_file, &cert_info.cert_pem)?;
+        std::fs::write(&key_file, &cert_info.key_pem)?;
 
         println!("Certificate generated successfully!");
-        println!("  Domain: {}", cert_manager.domain());
+        println!("  Domain: {}", cert_info.domain);
+        println!("  Certificate Type: {:?}", cert_info.cert_type);
         println!("  Certificate: {}", cert_file.display());
         println!("  Private Key: {}", key_file.display());
-        println!("  {}", cert_manager.expiration_info());
-
-        if cert_manager.is_expiring_soon() {
-            println!("  ⚠️  Certificate will expire soon!");
-        }
     }
 
     Ok(())
