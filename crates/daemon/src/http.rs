@@ -175,9 +175,7 @@ pub fn create_router_with_config(app_state: &AppState, config: &HttpConfig) -> R
     // Add middleware
     let service_builder = ServiceBuilder::new()
         .layer(TraceLayer::new_for_http())
-        .layer(TimeoutLayer::new(Duration::from_secs(
-            config.timeout_secs,
-        )));
+        .layer(TimeoutLayer::new(Duration::from_secs(config.timeout_secs)));
 
     app = app.layer(service_builder);
 

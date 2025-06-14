@@ -55,7 +55,8 @@ impl CertificateManager {
     pub async fn new(config: LetsEncryptConfig, cert_dir: PathBuf) -> Result<Self> {
         // Ensure certificate directory exists
         if !cert_dir.exists() {
-            fs::create_dir_all(&cert_dir).await
+            fs::create_dir_all(&cert_dir)
+                .await
                 .with_certificate_context("Failed to create cert directory")?;
             info!("Created certificate directory: {}", cert_dir.display());
         }
@@ -286,22 +287,38 @@ impl CertificateManager {
 
             match response.response {
                 Some(create_dns_challenge_response::Response::Progress(progress)) => {
-                    info!("DNS challenge progress for {}: {} - {}", domain, progress.stage, progress.message);
+                    info!(
+                        "DNS challenge progress for {}: {} - {}",
+                        domain, progress.stage, progress.message
+                    );
                 }
                 Some(create_dns_challenge_response::Response::Complete(complete)) => {
                     if complete.verified {
                         record_id = Some(complete.record_id);
-                        info!("DNS challenge completed for domain: {}, record_id: {}", domain, record_id.as_ref().unwrap());
+                        info!(
+                            "DNS challenge completed for domain: {}, record_id: {}",
+                            domain,
+                            record_id.as_ref().unwrap()
+                        );
                         break;
                     } else {
-                        return Err(DaemonError::Certificate(format!("DNS challenge verification failed for domain: {}", domain)));
+                        return Err(DaemonError::Certificate(format!(
+                            "DNS challenge verification failed for domain: {}",
+                            domain
+                        )));
                     }
                 }
                 Some(create_dns_challenge_response::Response::Error(error)) => {
-                    return Err(DaemonError::Certificate(format!("DNS challenge error for domain {}: {}", domain, error.message)));
+                    return Err(DaemonError::Certificate(format!(
+                        "DNS challenge error for domain {}: {}",
+                        domain, error.message
+                    )));
                 }
                 None => {
-                    return Err(DaemonError::Certificate(format!("Empty response from DNS challenge stream for domain: {}", domain)));
+                    return Err(DaemonError::Certificate(format!(
+                        "Empty response from DNS challenge stream for domain: {}",
+                        domain
+                    )));
                 }
             }
         }
@@ -315,10 +332,10 @@ impl CertificateManager {
 
         // 6. Check DNS propagation using streaming RPC
         let propagation_request = CheckDnsPropagationRequest {
-                domain: format!("_acme-challenge.{}", domain),
-                expected_value: dns_value.clone(),
-                timeout_seconds: 300, // 5 minutes
-            };
+            domain: format!("_acme-challenge.{}", domain),
+            expected_value: dns_value.clone(),
+            timeout_seconds: 300, // 5 minutes
+        };
 
         let mut propagation_stream = relay_client
             .check_dns_propagation(propagation_request)
@@ -331,7 +348,10 @@ impl CertificateManager {
 
             match response.response {
                 Some(check_dns_propagation_response::Response::Progress(progress)) => {
-                    info!("DNS propagation progress for {}: {} - {}", domain, progress.stage, progress.message);
+                    info!(
+                        "DNS propagation progress for {}: {} - {}",
+                        domain, progress.stage, progress.message
+                    );
                 }
                 Some(check_dns_propagation_response::Response::Complete(complete)) => {
                     if complete.propagated {
@@ -345,10 +365,16 @@ impl CertificateManager {
                     break;
                 }
                 Some(check_dns_propagation_response::Response::Error(error)) => {
-                    return Err(DaemonError::Certificate(format!("DNS propagation check error for domain {}: {}", domain, error.message)));
+                    return Err(DaemonError::Certificate(format!(
+                        "DNS propagation check error for domain {}: {}",
+                        domain, error.message
+                    )));
                 }
                 None => {
-                    return Err(DaemonError::Certificate(format!("Empty response from DNS propagation stream for domain: {}", domain)));
+                    return Err(DaemonError::Certificate(format!(
+                        "Empty response from DNS propagation stream for domain: {}",
+                        domain
+                    )));
                 }
             }
         }
@@ -369,7 +395,7 @@ impl CertificateManager {
         while let instant_acme::OrderStatus::Pending = order.state().status {
             if status_checked >= 5 {
                 return Err(DaemonError::certificate_error(
-                    "Order remained pending for too long"
+                    "Order remained pending for too long",
                 ));
             }
             tokio::time::sleep(Duration::from_millis(250)).await;
@@ -459,12 +485,16 @@ impl CertificateManager {
 
     /// Load all certificates from disk into memory
     async fn load_certificates_from_disk(&self) -> Result<()> {
-        let mut entries = fs::read_dir(&self.cert_dir).await
+        let mut entries = fs::read_dir(&self.cert_dir)
+            .await
             .with_certificate_context("Failed to read cert directory")?;
 
         let mut loaded_count = 0;
-        while let Some(entry) = entries.next_entry().await
-            .with_certificate_context("Failed to read cert directory entry")? {
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .with_certificate_context("Failed to read cert directory entry")?
+        {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("json") {
                 match self.load_certificate_from_file(&path).await {
@@ -489,11 +519,11 @@ impl CertificateManager {
 
     /// Load a single certificate from a JSON file
     async fn load_certificate_from_file(&self, path: &std::path::Path) -> Result<CertificateInfo> {
-        let content = fs::read_to_string(path).await
+        let content = fs::read_to_string(path)
+            .await
             .with_certificate_context("Failed to read certificate file")?;
 
-        serde_json::from_str(&content)
-            .with_certificate_context("Failed to parse certificate JSON")
+        serde_json::from_str(&content).with_certificate_context("Failed to parse certificate JSON")
     }
 
     /// Save a certificate to disk
@@ -504,7 +534,8 @@ impl CertificateManager {
         let json = serde_json::to_string_pretty(cert_info)
             .with_certificate_context("Failed to serialize certificate")?;
 
-        fs::write(&path, json).await
+        fs::write(&path, json)
+            .await
             .with_certificate_context("Failed to write certificate to disk")?;
 
         debug!(
@@ -566,8 +597,9 @@ impl CertificateManager {
             domain
         );
 
-        let mut params = CertificateParams::new(vec![domain.to_string()])
-            .map_err(|e| DaemonError::certificate_error(format!("Failed to create certificate params: {}", e)))?;
+        let mut params = CertificateParams::new(vec![domain.to_string()]).map_err(|e| {
+            DaemonError::certificate_error(format!("Failed to create certificate params: {}", e))
+        })?;
 
         // Set certificate validity period (90 days)
         let now = time::OffsetDateTime::now_utc();
@@ -602,12 +634,14 @@ impl CertificateManager {
         params.extended_key_usages = vec![rcgen::ExtendedKeyUsagePurpose::ServerAuth];
 
         // Create a key pair from the P2P private key
-        let key_pair = Self::derive_key_pair_from_p2p_key(p2p_private_key)
-            .map_err(|e| DaemonError::certificate_error(format!("Failed to derive key pair: {}", e)))?;
+        let key_pair = Self::derive_key_pair_from_p2p_key(p2p_private_key).map_err(|e| {
+            DaemonError::certificate_error(format!("Failed to derive key pair: {}", e))
+        })?;
 
         // Generate the certificate
-        let cert = params.self_signed(&key_pair)
-            .map_err(|e| DaemonError::certificate_error(format!("Failed to generate certificate: {}", e)))?;
+        let cert = params.self_signed(&key_pair).map_err(|e| {
+            DaemonError::certificate_error(format!("Failed to generate certificate: {}", e))
+        })?;
 
         let cert_pem = cert.pem();
         let key_pem = key_pair.serialize_pem();

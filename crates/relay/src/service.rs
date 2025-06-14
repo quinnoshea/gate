@@ -40,19 +40,16 @@ fn is_valid_challenge_domain(domain: &str) -> bool {
 #[derive(Clone, Debug)]
 pub struct RelayServiceImpl {
     dns_manager: Arc<CloudflareDnsManager>,
-    proxy_registry: Arc<crate::https_proxy::ProxyRegistry>,
 }
 
 impl RelayServiceImpl {
     /// Create a new RelayService implementation
     pub fn new(
         dns_manager: Arc<CloudflareDnsManager>,
-        proxy_registry: Arc<crate::https_proxy::ProxyRegistry>,
     ) -> Self {
         info!("Creating RelayService instance");
         Self {
             dns_manager,
-            proxy_registry,
         }
     }
 }

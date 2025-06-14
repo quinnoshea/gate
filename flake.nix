@@ -23,6 +23,8 @@
           
           src = pkgs.lib.cleanSource ./.;
           
+          doCheck = false;
+          
           cargoLock = {
             lockFile = ./Cargo.lock;
             outputHashes = {

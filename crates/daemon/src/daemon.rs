@@ -6,16 +6,17 @@ use crate::service::DaemonServiceImpl;
 use crate::upstream::UpstreamClient;
 use crate::{CoreError, DaemonError, Result};
 use hellas_gate_proto::pb::gate::inference::v1::*;
-use hellas_gate_proto::pb::gate::relay::v1::{relay_service_client, relay_service_server::RelayServiceServer};
+use hellas_gate_proto::pb::gate::relay::v1::{
+    relay_service_client, relay_service_server::RelayServiceServer,
+};
 use iroh::Endpoint;
-use n0_watcher::Watcher;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Server;
 use tonic_iroh_transport::GrpcProtocolHandler;
-use tracing::{error, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 /// P2P connection information for Axum request extensions
 /// Just holds references to the actual Iroh objects that contain all the rich metadata
@@ -77,7 +78,7 @@ impl TlsStreamContext {
         p2p_send: iroh::endpoint::SendStream,
         p2p_recv: iroh::endpoint::RecvStream,
     ) -> crate::Result<()> {
-        info!(
+        debug!(
             "TLS FORWARDING: Terminating TLS for domain: {} from relay",
             self.domain
         );
@@ -88,14 +89,14 @@ impl TlsStreamContext {
         // Terminate TLS to get decrypted stream
         let decrypted_stream = self.tls_acceptor.accept(p2p_stream).await?;
 
-        info!("TLS FORWARDING: Successfully terminated TLS, forwarding to Axum");
+        debug!("TLS FORWARDING: Successfully terminated TLS, forwarding to Axum");
 
         // Forward decrypted stream directly to Axum with P2P info
         self.http_server
             .handle_stream_with_p2p_info(decrypted_stream, Some(self.to_p2p_info()))
             .await?;
 
-        info!(
+        debug!(
             "TLS FORWARDING: Stream completed successfully for domain: {}",
             self.domain
         );
@@ -408,11 +409,11 @@ impl GateDaemon {
 
         // Wait for address discovery with timeout
         let node_addr = tokio::time::timeout(Duration::from_secs(10), self.endpoint.node_addr())
-        .await
-        .map_err(|_| {
-            DaemonError::ConfigString("Timeout waiting for node address discovery".to_string())
-        })?
-        .map_err(|e| DaemonError::Other(e))?;
+            .await
+            .map_err(|_| {
+                DaemonError::ConfigString("Timeout waiting for node address discovery".to_string())
+            })?
+            .map_err(|e| DaemonError::Other(e))?;
 
         // Convert direct addresses to our format
         let direct_addresses: Vec<std::net::SocketAddr> =
@@ -531,7 +532,6 @@ impl GateDaemon {
         info!("Creating TLS forwarding protocol handler");
 
         // Create certificate info for TLS termination
-        let cert_manager_clone = cert_manager.clone();
         let key_array: [u8; 32] = identity[0..32]
             .try_into()
             .map_err(|_| DaemonError::ConfigString("Invalid identity key length".to_string()))?;
@@ -547,9 +547,11 @@ impl GateDaemon {
         let gate_id = hellas_gate_core::GateId::from_bytes(*secret_key.public().as_bytes());
 
         // Create certificate info for TLS handler
-        let cert_info = cert_manager.get_certificate(&domain).await.ok_or_else(|| {
-            DaemonError::Certificate(format!("No certificate found for domain: {}", domain))
-        })?;
+        let cert_info = cert_manager
+            .get_or_create_certificate(
+                &domain, &node_id, &key_array, None, // No relay addr for test
+            )
+            .await?;
 
         // Create TLS acceptor for terminating HTTPS traffic
         let tls_handler =
@@ -570,12 +572,8 @@ impl GateDaemon {
 
         // Create TLS forwarding protocol handler
         let tls_forwarding_handler = TlsForwardingProtocolHandler {
-            config: config.clone(),
-            cert_manager: cert_manager_clone,
             domain,
             node_id,
-            upstream_client,
-            gate_id,
             tls_acceptor,
             http_server,
             endpoint,
@@ -715,7 +713,7 @@ mod tests {
             .await
             .expect("Failed to create test endpoint");
 
-        println!("✓ Endpoint created successfully");
+        println!("Endpoint created successfully");
         println!("  Node ID: {}", endpoint.node_id());
 
         // Wait for discovery to find local addresses
@@ -724,16 +722,20 @@ mod tests {
 
         // Check bound sockets (what we can actually get)
         let bound_sockets = endpoint.bound_sockets();
-        println!("  Bound socket addresses: {}", bound_sockets.len());
-        for (i, socket) in bound_sockets.iter().enumerate() {
-            println!("    Socket {}: {}", i + 1, socket);
+        let socket_count = if bound_sockets.1.is_some() { 2 } else { 1 };
+        println!("  Bound socket addresses: {}", socket_count);
+        println!("    Socket 1: {}", bound_sockets.0);
+        if let Some(second_socket) = bound_sockets.1 {
+            println!("    Socket 2: {}", second_socket);
         }
 
-        if bound_sockets.is_empty() {
-            println!("  ⚠️  WARNING: No bound sockets found");
-            println!("  This indicates a socket binding issue");
-        } else {
-            println!("  ✓ Socket binding successful");
+        match bound_sockets.1 {
+            Some(_) => {
+                println!("  Socket binding successful (2 sockets)");
+            }
+            None => {
+                println!("  Socket binding successful (1 socket)");
+            }
         }
 
         // Check node ID and public key
@@ -762,46 +764,48 @@ mod tests {
         .await
         {
             Ok(Ok(daemon)) => {
-                println!("✓ Daemon full initialization succeeded");
+                println!("Daemon full initialization succeeded");
 
                 // Test that endpoint is immediately available (no Option unwrapping)
                 let bound_sockets = daemon.endpoint.bound_sockets();
-                println!("  Daemon endpoint bound sockets: {}", bound_sockets.len());
+                let socket_count = if bound_sockets.1.is_some() { 2 } else { 1 };
+                println!("  Daemon endpoint bound sockets: {}", socket_count);
 
-                for (i, addr) in bound_sockets.iter().enumerate() {
-                    println!("    {}: {}", i + 1, addr);
+                println!("    1: {}", bound_sockets.0);
+                if let Some(second_socket) = bound_sockets.1 {
+                    println!("    2: {}", second_socket);
                 }
 
                 // Test that node_addr works immediately
                 match timeout(Duration::from_secs(5), daemon.node_addr()).await {
                     Ok(Ok(node_addr)) => {
                         println!(
-                            "✓ Node address available: {} direct addresses",
+                            "Node address available: {} direct addresses",
                             node_addr.direct_addresses.len()
                         );
                     }
                     Ok(Err(e)) => {
-                        println!("⚠️ Node address failed: {}", e);
+                        println!("WARNING: Node address failed: {}", e);
                         // This might fail if address discovery is slow, which is OK
                     }
                     Err(_) => {
-                        println!("⚠️ Node address discovery timed out - this is expected in some environments");
+                        println!("WARNING: Node address discovery timed out - this is expected in some environments");
                     }
                 }
 
                 // Test that certificate manager is available
                 let cert_count = daemon.cert_manager().certificate_count().await;
                 println!(
-                    "✓ Certificate manager available with {} certificates",
+                    "Certificate manager available with {} certificates",
                     cert_count
                 );
             }
             Ok(Err(e)) => {
-                println!("❌ Daemon initialization failed: {}", e);
+                println!("ERROR: Daemon initialization failed: {}", e);
                 panic!("Daemon initialization should succeed");
             }
             Err(_) => {
-                println!("❌ Daemon initialization timed out");
+                println!("ERROR: Daemon initialization timed out");
                 panic!("Daemon initialization should not timeout");
             }
         }
@@ -813,12 +817,8 @@ mod tests {
 /// TLS forwarding protocol handler using tonic-iroh IrohStream
 #[derive(Clone)]
 struct TlsForwardingProtocolHandler {
-    config: DaemonConfig,
-    cert_manager: crate::certs::CertificateManager,
     domain: String,
     node_id: String,
-    upstream_client: UpstreamClient,
-    gate_id: hellas_gate_core::GateId,
     tls_acceptor: tokio_rustls::TlsAcceptor,
     http_server: std::sync::Arc<crate::http::HttpServer>,
     endpoint: iroh::Endpoint,
@@ -834,36 +834,38 @@ impl std::fmt::Debug for TlsForwardingProtocolHandler {
 }
 
 impl iroh::protocol::ProtocolHandler for TlsForwardingProtocolHandler {
-    fn accept(&self, conn: iroh::endpoint::Connection) -> std::pin::Pin<Box<dyn futures::Future<Output = anyhow::Result<()>> + Send + 'static>> {
+    fn accept(
+        &self,
+        conn: iroh::endpoint::Connection,
+    ) -> std::pin::Pin<Box<dyn futures::Future<Output = anyhow::Result<()>> + Send + 'static>> {
         let domain = self.domain.clone();
         let node_id = self.node_id.clone();
         let tls_acceptor = self.tls_acceptor.clone();
         let http_server = self.http_server.clone();
         let endpoint = self.endpoint.clone();
         Box::pin(async move {
-        info!("TLS FORWARDING: Received P2P connection from relay!");
-        info!("  Target domain: {}", domain);
-        info!("  Target node ID: {}", node_id);
+            debug!("TLS FORWARDING: Received P2P connection from relay!");
 
-        // Create stream context with all needed data
-        let context = TlsStreamContext::new(
-            domain.clone(),
-            node_id.clone(),
-            tls_acceptor.clone(),
-            http_server.clone(),
-            conn.clone(),
-            endpoint.clone(),
-        );
+            // Create stream context with all needed data
+            let context = TlsStreamContext::new(
+                domain.clone(),
+                node_id.clone(),
+                tls_acceptor.clone(),
+                http_server.clone(),
+                conn.clone(),
+                endpoint.clone(),
+            );
 
-        // Spawn a task to handle this connection and return immediately
-        tokio::spawn(async move {
-            if let Err(e) = TlsForwardingProtocolHandler::handle_connection(conn, context).await {
-                error!("TLS forwarding connection failed: {}", e.to_string());
-            }
-        });
+            // Spawn a task to handle this connection and return immediately
+            tokio::spawn(async move {
+                if let Err(e) = TlsForwardingProtocolHandler::handle_connection(conn, context).await
+                {
+                    error!("TLS forwarding connection failed: {}", e.to_string());
+                }
+            });
 
-        info!("TLS FORWARDING: Connection accepted, spawned handler task");
-        Ok(())
+            debug!("TLS FORWARDING: Connection accepted, spawned handler task");
+            Ok(())
         })
     }
 }

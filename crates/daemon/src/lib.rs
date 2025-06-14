@@ -117,10 +117,10 @@ impl DaemonError {
 pub trait DaemonErrorContext<T> {
     /// Add certificate-related context to an error
     fn with_certificate_context(self, operation: &str) -> Result<T>;
-    
+
     /// Add P2P-related context to an error
     fn with_p2p_context(self, operation: &str) -> Result<T>;
-    
+
     /// Add HTTP-related context to an error
     fn with_http_context(self, operation: &str) -> Result<T>;
 }
@@ -129,11 +129,11 @@ impl<T> DaemonErrorContext<T> for std::result::Result<T, std::io::Error> {
     fn with_certificate_context(self, operation: &str) -> Result<T> {
         self.map_err(|e| DaemonError::certificate_error(format!("{}: {}", operation, e)))
     }
-    
+
     fn with_p2p_context(self, operation: &str) -> Result<T> {
         self.map_err(|e| DaemonError::p2p_error(format!("{}: {}", operation, e)))
     }
-    
+
     fn with_http_context(self, operation: &str) -> Result<T> {
         self.map_err(|e| DaemonError::http_error(format!("{}: {}", operation, e)))
     }
@@ -143,11 +143,11 @@ impl<T> DaemonErrorContext<T> for std::result::Result<T, serde_json::Error> {
     fn with_certificate_context(self, operation: &str) -> Result<T> {
         self.map_err(|e| DaemonError::certificate_error(format!("{}: {}", operation, e)))
     }
-    
+
     fn with_p2p_context(self, operation: &str) -> Result<T> {
         self.map_err(|e| DaemonError::p2p_error(format!("{}: {}", operation, e)))
     }
-    
+
     fn with_http_context(self, operation: &str) -> Result<T> {
         self.map_err(|e| DaemonError::http_error(format!("{}: {}", operation, e)))
     }

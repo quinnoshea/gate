@@ -67,7 +67,6 @@ impl RelayServer {
         // Create relay service implementation
         let relay_service = Arc::new(RelayServiceImpl::new(
             self.dns_manager.clone(),
-            self.https_proxy.registry(),
         ));
 
         // Set up tonic-iroh protocol handler
