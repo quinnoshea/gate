@@ -51,12 +51,6 @@ pub struct DnsConfig {
 
     /// DNS update interval in seconds
     pub update_interval_secs: u64,
-
-    /// A record addresses (IPv4) for domain registration
-    pub a_records: Vec<String>,
-
-    /// AAAA record addresses (IPv6) for domain registration
-    pub aaaa_records: Vec<String>,
 }
 
 impl Default for RelayConfig {
@@ -92,10 +86,8 @@ impl Default for DnsConfig {
     fn default() -> Self {
         Self {
             base_domain: "private.hellas.ai".to_string(),
-            provider: "manual".to_string(), // Manual DNS management by default
-            update_interval_secs: 300,      // 5 minutes
-            a_records: vec![],
-            aaaa_records: vec![],
+            provider: "manual".to_string(),
+            update_interval_secs: 300,
         }
     }
 }
