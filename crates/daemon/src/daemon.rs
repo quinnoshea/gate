@@ -258,6 +258,9 @@ impl GateDaemon {
         // Start HTTP server
         Self::start_http_server(config, identity, upstream_client, shutdown_token.clone()).await?;
 
+        // Connect to bootstrap peers
+        Self::connect_to_bootstrap_peers(config, endpoint, discovered_relays.clone()).await?;
+
         // TLS bridge will be created as needed for each connection
 
         info!("All background services started successfully");
@@ -581,6 +584,72 @@ impl GateDaemon {
 
         info!("TLS forwarding protocol handler created successfully");
         Ok(tls_forwarding_handler)
+    }
+
+    /// Connect to configured bootstrap peers during daemon startup
+    async fn connect_to_bootstrap_peers(
+        config: &DaemonConfig,
+        endpoint: &Endpoint,
+        discovered_relays: Arc<tokio::sync::RwLock<std::collections::HashSet<iroh::NodeId>>>,
+    ) -> Result<()> {
+        if config.p2p.bootstrap_peers.is_empty() {
+            info!("No bootstrap peers configured");
+            return Ok(());
+        }
+
+        info!("Connecting to {} bootstrap peers", config.p2p.bootstrap_peers.len());
+
+        for peer_addr_str in &config.p2p.bootstrap_peers {
+            info!("Attempting to connect to bootstrap peer: {}", peer_addr_str);
+            
+            // Parse the peer address (format: "peer_id@ip:port")
+            let gate_addr = match peer_addr_str.parse::<hellas_gate_core::GateAddr>() {
+                Ok(addr) => addr,
+                Err(e) => {
+                    warn!("Failed to parse bootstrap peer address '{}': {}", peer_addr_str, e);
+                    continue;
+                }
+            };
+
+            // Convert GateId to iroh::NodeId
+            let node_id = match iroh::NodeId::from_bytes(gate_addr.id.as_bytes()) {
+                Ok(id) => id,
+                Err(e) => {
+                    warn!("Failed to convert GateId to NodeId for '{}': {}", peer_addr_str, e);
+                    continue;
+                }
+            };
+
+            let node_addr = iroh::NodeAddr::new(node_id)
+                .with_direct_addresses(gate_addr.direct_addresses.into_iter());
+
+            // Generate relay service ALPN
+            let (_, _, relay_alpn) = GrpcProtocolHandler::for_service::<
+                RelayServiceServer<hellas_gate_relay::service::RelayServiceImpl>,
+            >();
+
+            // Try to connect to the bootstrap peer as a relay
+            // For bootstrap connections, we'll try a simple connection first
+            match endpoint.connect(node_addr.clone(), &relay_alpn).await {
+                Ok(connection) => {
+                    info!("Successfully connected to bootstrap peer: {}", peer_addr_str);
+                    
+                    // Add to discovered relays
+                    {
+                        let mut relays = discovered_relays.write().await;
+                        relays.insert(node_id);
+                    }
+                    
+                    // Close the connection as we just wanted to test it
+                    drop(connection);
+                }
+                Err(e) => {
+                    warn!("Failed to connect to bootstrap peer '{}': {}", peer_addr_str, e);
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Try to connect to a peer and check if it supports the relay service

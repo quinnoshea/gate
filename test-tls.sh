@@ -21,7 +21,7 @@ if [[ -z "$DAEMON_NODE_ID" ]]; then
     # Fallback to hardcoded current node ID (first 16 chars)
     DAEMON_NODE_ID="3818e20a7b12092e"
 fi
-RELAY_PORT="8443"
+RELAY_PORT="443"
 
 echo "Testing HTTPS SNI proxy to daemon..."
 echo "Daemon Node ID: $DAEMON_NODE_ID"
@@ -31,8 +31,8 @@ echo ""
 
 DAEMON_DOMAIN="$DAEMON_NODE_ID.private.hellas.ai"
 
+#  --resolve "$DAEMON_DOMAIN:$RELAY_PORT:127.0.0.1" \
 curl -k \
-  --resolve "$DAEMON_DOMAIN:$RELAY_PORT:127.0.0.1" \
   -H "Content-Type: application/json" \
   -d '{"model":"gemma-2-2b-it","messages":[{"role":"user","content":"Hello! Can you tell me a short joke?"}],"max_tokens":100,"temperature":0.7}' \
   -v \
