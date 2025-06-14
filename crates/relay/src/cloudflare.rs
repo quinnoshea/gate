@@ -87,8 +87,8 @@ impl CloudflareDnsManager {
             id: None,
             r#type: "TXT".to_string(),
             name: challenge_name,
-            content: token.to_string(),
-            ttl: 120, // 2 minute TTL for ACME challenges
+            content: format!("\"{token}\""), // Wrap token in quotes for TXT record
+            ttl: 120,                        // 2 minute TTL for ACME challenges
             proxied: Some(false),
         };
 
@@ -282,33 +282,6 @@ impl CloudflareDnsManager {
         }
 
         Ok(cf_response.result.unwrap_or_default())
-    }
-
-    /// Delete a DNS record by ID
-    async fn delete_dns_record(&self, record_id: &str) -> Result<()> {
-        let url = format!(
-            "https://api.cloudflare.com/client/v4/zones/{}/dns_records/{}",
-            self.zone_id, record_id
-        );
-
-        let response = self
-            .client
-            .delete(&url)
-            .bearer_auth(&self.api_token)
-            .send()
-            .await
-            .map_err(|e| RelayError::Dns(format!("Failed to delete DNS record: {}", e)))?;
-
-        if !response.status().is_success() {
-            let text = response.text().await.unwrap_or_default();
-            return Err(RelayError::Dns(format!(
-                "DNS record deletion failed: {}",
-                text
-            )));
-        }
-
-        debug!("Deleted DNS record: {}", record_id);
-        Ok(())
     }
 
     /// Check DNS propagation status (non-blocking, single check)
