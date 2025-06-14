@@ -15,6 +15,7 @@ use hellas_gate_core::GateId;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::net::TcpListener;
 use tower::{ServiceBuilder, ServiceExt};
 use tower_http::{cors::CorsLayer, timeout::TimeoutLayer, trace::TraceLayer};
@@ -102,25 +103,28 @@ impl HttpServer {
         S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Unpin + 'static,
     {
         let mut app = self.create_app();
-        
+
         // Add P2P connection info as extension if provided
         if let Some(p2p_info) = p2p_info {
-            info!("Handling P2P stream connection from node: {:?}", p2p_info.connection.remote_node_id());
+            info!(
+                "Handling P2P stream connection from node: {:?}",
+                p2p_info.connection.remote_node_id()
+            );
             app = app.layer(axum::Extension(p2p_info));
         } else {
             info!("Handling direct stream connection");
         }
-        
+
         // Wrap tokio stream for hyper compatibility
         let io = hyper_util::rt::TokioIo::new(stream);
-        
+
         // Use hyper directly to handle the stream
         let service = hyper::service::service_fn(move |req| {
             let app = app.clone();
             async move {
-                app.oneshot(req).await.map_err(|e| {
-                    std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
-                })
+                app.oneshot(req)
+                    .await
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
             }
         });
 
@@ -171,7 +175,7 @@ pub fn create_router_with_config(app_state: &AppState, config: &HttpConfig) -> R
     // Add middleware
     let service_builder = ServiceBuilder::new()
         .layer(TraceLayer::new_for_http())
-        .layer(TimeoutLayer::new(std::time::Duration::from_secs(
+        .layer(TimeoutLayer::new(Duration::from_secs(
             config.timeout_secs,
         )));
 

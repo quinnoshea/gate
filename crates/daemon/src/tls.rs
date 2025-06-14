@@ -43,9 +43,7 @@ impl TlsHandler {
     }
 
     /// Create rustls server configuration
-    fn create_tls_config_from_cert_data(
-        cert_data: &TlsCertData,
-    ) -> Result<rustls::ServerConfig> {
+    fn create_tls_config_from_cert_data(cert_data: &TlsCertData) -> Result<rustls::ServerConfig> {
         let cert_chain = vec![cert_data.certificate_der().clone()];
         let private_key = cert_data.private_key_der().clone_key();
 
@@ -102,59 +100,71 @@ impl TlsHandler {
         debug!("Starting TLS termination process");
 
         // Create a TLS stream using the acceptor
-        let tls_stream = self.acceptor.accept(input).await
+        let tls_stream = self
+            .acceptor
+            .accept(input)
+            .await
             .map_err(|e| DaemonError::Certificate(format!("TLS handshake failed: {}", e)))?;
 
         // Read the decrypted HTTP request from the TLS stream
         let mut buffer = Vec::new();
         let mut reader = tokio::io::BufReader::new(tls_stream);
-        
+
         // Read until we have the complete HTTP request
         // We'll read line by line until we find the end of headers (empty line)
-        let mut headers_complete = false;
         let mut content_length = 0usize;
-        
+
         loop {
             let mut line = String::new();
-            let bytes_read = tokio::io::AsyncBufReadExt::read_line(&mut reader, &mut line).await
-                .map_err(|e| DaemonError::Certificate(format!("Failed to read TLS stream: {}", e)))?;
-            
+            let bytes_read = tokio::io::AsyncBufReadExt::read_line(&mut reader, &mut line)
+                .await
+                .map_err(|e| {
+                    DaemonError::Certificate(format!("Failed to read TLS stream: {}", e))
+                })?;
+
             if bytes_read == 0 {
                 break; // EOF
             }
-            
+
             buffer.extend_from_slice(line.as_bytes());
-            
+
             // Check if this line indicates Content-Length
             if line.to_lowercase().starts_with("content-length:") {
                 if let Some(value) = line.split(':').nth(1) {
                     content_length = value.trim().parse().unwrap_or(0);
                 }
             }
-            
+
             // Check if we've reached the end of headers (empty line)
-            if line.trim().is_empty() && !headers_complete {
-                headers_complete = true;
-                
+            if line.trim().is_empty() {
                 // If there's a body to read, read it
                 if content_length > 0 {
                     let mut body_buffer = vec![0u8; content_length];
-                    tokio::io::AsyncReadExt::read_exact(&mut reader, &mut body_buffer).await
-                        .map_err(|e| DaemonError::Certificate(format!("Failed to read request body: {}", e)))?;
+                    tokio::io::AsyncReadExt::read_exact(&mut reader, &mut body_buffer)
+                        .await
+                        .map_err(|e| {
+                            DaemonError::Certificate(format!("Failed to read request body: {}", e))
+                        })?;
                     buffer.extend_from_slice(&body_buffer);
                 }
                 break;
             }
         }
-        
-        let http_request = String::from_utf8(buffer)
-            .map_err(|e| DaemonError::Certificate(format!("Invalid UTF-8 in HTTP request: {}", e)))?;
-        
+
+        let http_request = String::from_utf8(buffer).map_err(|e| {
+            DaemonError::Certificate(format!("Invalid UTF-8 in HTTP request: {}", e))
+        })?;
+
         if http_request.trim().is_empty() {
-            return Err(DaemonError::Certificate("Empty HTTP request after TLS termination".to_string()));
+            return Err(DaemonError::Certificate(
+                "Empty HTTP request after TLS termination".to_string(),
+            ));
         }
-        
-        debug!("Successfully terminated TLS, extracted {} bytes of HTTP data", http_request.len());
+
+        debug!(
+            "Successfully terminated TLS, extracted {} bytes of HTTP data",
+            http_request.len()
+        );
         Ok(http_request)
     }
 
@@ -170,9 +180,10 @@ impl TlsHandler {
         format!("Domain: {}", self.cert_data.domain())
     }
 
-    /// Create rustls server configuration for direct TLS server
-    pub fn create_tls_config(&self) -> Result<rustls::ServerConfig> {
-        Self::create_tls_config_from_cert_data(&self.cert_data)
+    /// Get the TLS acceptor for direct use
+    #[must_use]
+    pub fn acceptor(&self) -> TlsAcceptor {
+        self.acceptor.clone()
     }
 }
 
@@ -196,8 +207,8 @@ mod tests {
     #[ignore = "requires valid certificate data"]
     async fn test_tls_handler_creation() {
         let cert_info = create_test_cert_info();
-        let handler = TlsHandler::from_certificate_info(&cert_info)
-            .expect("Failed to create TLS handler");
+        let handler =
+            TlsHandler::from_certificate_info(&cert_info).expect("Failed to create TLS handler");
 
         assert_eq!(handler.domain(), "test.private.hellas.ai");
     }
@@ -206,8 +217,8 @@ mod tests {
     #[ignore = "requires valid certificate data"]
     async fn test_tls_termination_with_plain_http() {
         let cert_info = create_test_cert_info();
-        let handler = TlsHandler::from_certificate_info(&cert_info)
-            .expect("Failed to create TLS handler");
+        let handler =
+            TlsHandler::from_certificate_info(&cert_info).expect("Failed to create TLS handler");
 
         // Test with plain HTTP (should be detected and handled)
         let plain_http = b"GET /test HTTP/1.1\r\nHost: example.com\r\n\r\n";
@@ -225,8 +236,8 @@ mod tests {
     #[ignore = "requires valid certificate data"]
     async fn test_tls_termination_with_invalid_data() {
         let cert_info = create_test_cert_info();
-        let handler = TlsHandler::from_certificate_info(&cert_info)
-            .expect("Failed to create TLS handler");
+        let handler =
+            TlsHandler::from_certificate_info(&cert_info).expect("Failed to create TLS handler");
 
         // Test with random bytes (should fall back to mock)
         let random_bytes = b"random_non_http_data_12345";

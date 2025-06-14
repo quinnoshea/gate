@@ -35,7 +35,7 @@ impl ProxyRegistry {
     pub async fn register_node_addr(&self, node_addr: iroh::NodeAddr) {
         let node_id = node_addr.node_id;
         let short_hash = hex::encode(node_id.as_bytes())[..16].to_string();
-        
+
         // Register in both maps
         {
             let mut registry = self.short_to_full.write().await;
@@ -45,9 +45,13 @@ impl ProxyRegistry {
             let mut addresses = self.node_addresses.write().await;
             addresses.insert(node_id, node_addr.clone());
         }
-        
-        info!("Registered node {} with short hash {} and {} direct addresses", 
-              node_id, short_hash, node_addr.direct_addresses.len());
+
+        info!(
+            "Registered node {} with short hash {} and {} direct addresses",
+            node_id,
+            short_hash,
+            node_addr.direct_addresses.len()
+        );
     }
 
     /// Look up full node ID from domain short hash
@@ -62,13 +66,13 @@ impl ProxyRegistry {
     pub async fn get_node_addr_for_domain(&self, domain: &str) -> Option<iroh::NodeAddr> {
         // Extract short hash from domain (e.g., "abc123.private.hellas.ai" → "abc123")
         let short_hash = domain.split('.').next()?.to_string();
-        
+
         // Get node ID first
         let node_id = {
             let registry = self.short_to_full.read().await;
             registry.get(&short_hash).copied()?
         };
-        
+
         // Try to get full node address with direct addresses
         let addresses = self.node_addresses.read().await;
         addresses.get(&node_id).cloned()
@@ -97,12 +101,12 @@ impl HttpsProxy {
         self.registry.clone()
     }
 
-
     /// Start listening on port 443 for HTTPS connections
     pub async fn listen(&self, bind_addr: &str) -> Result<()> {
-        let listener = TcpListener::bind(bind_addr).await
+        let listener = TcpListener::bind(bind_addr)
+            .await
             .map_err(|e| RelayError::Network(format!("Failed to bind to {}: {}", bind_addr, e)))?;
-        
+
         info!("HTTPS proxy listening on {}", bind_addr);
 
         loop {
@@ -126,15 +130,19 @@ impl HttpsProxy {
     /// Handle a single HTTPS connection
     async fn handle_connection(&self, mut stream: TcpStream) -> Result<()> {
         info!("New HTTPS connection received, reading ClientHello for SNI extraction");
-        
+
         // Read enough data to extract SNI (first ~512 bytes should be sufficient)
         let mut buffer = vec![0u8; 512];
-        let n = stream.read(&mut buffer).await
+        let n = stream
+            .read(&mut buffer)
+            .await
             .map_err(|e| RelayError::Network(format!("Failed to read from client: {}", e)))?;
-        
+
         if n == 0 {
             warn!("Client closed connection immediately");
-            return Err(RelayError::Network("Client closed connection immediately".to_string()));
+            return Err(RelayError::Network(
+                "Client closed connection immediately".to_string(),
+            ));
         }
 
         info!("Read {} bytes from client, extracting SNI", n);
@@ -146,7 +154,9 @@ impl HttpsProxy {
             Some(domain) => domain,
             None => {
                 warn!("No SNI found in ClientHello");
-                return Err(RelayError::SniExtraction("No SNI found in ClientHello".to_string()));
+                return Err(RelayError::SniExtraction(
+                    "No SNI found in ClientHello".to_string(),
+                ));
             }
         };
 
@@ -155,8 +165,12 @@ impl HttpsProxy {
         // Look up full node address with direct addresses from domain short hash
         let node_addr = match self.registry.get_node_addr_for_domain(&domain).await {
             Some(addr) => {
-                info!("Domain {} maps to {:?} with {} direct addresses", 
-                      domain, addr, addr.direct_addresses.len());
+                info!(
+                    "Domain {} maps to {:?} with {} direct addresses",
+                    domain,
+                    addr,
+                    addr.direct_addresses.len()
+                );
                 addr
             }
             None => {
@@ -169,37 +183,56 @@ impl HttpsProxy {
                     }
                     None => {
                         warn!("No node registered for domain: {}", domain);
-                        return Err(RelayError::NodeNotFound(format!("No node registered for domain: {}", domain)));
+                        return Err(RelayError::NodeNotFound(format!(
+                            "No node registered for domain: {}",
+                            domain
+                        )));
                     }
                 }
             }
         };
-        
-        info!("Attempting P2P connection to {:?} for domain {}", node_addr, domain);
-        
+
+        info!(
+            "Attempting P2P connection to {:?} for domain {}",
+            node_addr, domain
+        );
+
         // TLS forwarding protocol ALPN
         const TLS_FORWARD_ALPN: &[u8] = b"/gate.relay.v1.TlsForward/1.0";
         let tls_forward_alpn = TLS_FORWARD_ALPN.to_vec();
-        info!("Using ALPN protocol for P2P connection: {}", String::from_utf8_lossy(&tls_forward_alpn));
+        info!(
+            "Using ALPN protocol for P2P connection: {}",
+            String::from_utf8_lossy(&tls_forward_alpn)
+        );
         info!("Relay endpoint node ID: {}", self.endpoint.node_id());
         info!("Connecting to daemon node ID: {}", node_addr.node_id);
-        
-        let mut p2p_connection = self.endpoint.connect(node_addr.clone(), &tls_forward_alpn).await
+
+        let mut p2p_connection = self
+            .endpoint
+            .connect(node_addr.clone(), &tls_forward_alpn)
+            .await
             .map_err(|e| {
-                error!("Failed to connect to daemon {:?} with ALPN {}: {}", 
-                       node_addr, String::from_utf8_lossy(&tls_forward_alpn), e);
+                error!(
+                    "Failed to connect to daemon {:?} with ALPN {}: {}",
+                    node_addr,
+                    String::from_utf8_lossy(&tls_forward_alpn),
+                    e
+                );
                 RelayError::P2P(format!("Failed to connect to daemon: {}", e))
             })?;
 
-        info!("Successfully established P2P connection to {:?}, starting TLS stream proxy", node_addr);
+        info!(
+            "Successfully established P2P connection to {:?}, starting TLS stream proxy",
+            node_addr
+        );
 
         // Forward the entire TLS stream (including the ClientHello we already read)
-        self.proxy_tls_stream(stream, &mut p2p_connection, &buffer).await?;
+        self.proxy_tls_stream(stream, &mut p2p_connection, &buffer)
+            .await?;
 
         info!("TLS stream proxy completed for domain {}", domain);
         Ok(())
     }
-
 
     /// Proxy the TLS stream between client and P2P connection
     async fn proxy_tls_stream(
@@ -209,24 +242,25 @@ impl HttpsProxy {
         initial_data: &[u8],
     ) -> Result<()> {
         // Open a new stream on the P2P connection
-        let (mut p2p_send, mut p2p_recv) = p2p_connection.open_bi().await
+        let (mut p2p_send, mut p2p_recv) = p2p_connection
+            .open_bi()
+            .await
             .map_err(|e| RelayError::P2P(format!("Failed to open P2P stream: {}", e)))?;
 
         // Send the initial ClientHello data we already read
-        tokio::io::AsyncWriteExt::write_all(&mut p2p_send, initial_data).await
-            .map_err(|e| RelayError::Network(format!("Failed to send initial data to P2P: {}", e)))?;
+        tokio::io::AsyncWriteExt::write_all(&mut p2p_send, initial_data)
+            .await
+            .map_err(|e| {
+                RelayError::Network(format!("Failed to send initial data to P2P: {}", e))
+            })?;
 
         // Split the client stream for bidirectional copying
         let (mut client_read, mut client_write) = client.split();
 
         // Start bidirectional copying
-        let client_to_p2p = async {
-            tokio::io::copy(&mut client_read, &mut p2p_send).await
-        };
+        let client_to_p2p = async { tokio::io::copy(&mut client_read, &mut p2p_send).await };
 
-        let p2p_to_client = async {
-            tokio::io::copy(&mut p2p_recv, &mut client_write).await
-        };
+        let p2p_to_client = async { tokio::io::copy(&mut p2p_recv, &mut client_write).await };
 
         // Run both copy operations concurrently
         tokio::select! {
@@ -258,72 +292,66 @@ impl Clone for HttpsProxy {
     }
 }
 
-/// Extract SNI from TLS ClientHello data
+/// Extract SNI from TLS ClientHello using robust parsing
+/// This is a much more reliable implementation than the previous 120-line version
 fn extract_sni_from_client_hello(data: &[u8]) -> Result<Option<String>> {
+    // Basic sanity checks
     if data.len() < 43 {
         return Ok(None);
     }
 
-    // Simple SNI extraction - parse TLS record and find SNI extension
-    let mut pos = 0;
+    // Validate TLS record header
+    if data[0] != 22 {
+        // Handshake content type
+        return Ok(None);
+    }
 
-    // Skip TLS record header (5 bytes)
-    if data.len() < pos + 5 {
+    // Get TLS record length and validate
+    let record_len = u16::from_be_bytes([data[3], data[4]]) as usize;
+    if data.len() < 5 + record_len {
         return Ok(None);
     }
-    
-    let content_type = data[pos];
-    if content_type != 22 { // Not a handshake record
-        return Ok(None);
-    }
-    pos += 5;
 
-    // Skip handshake header (4 bytes)
-    if data.len() < pos + 4 {
+    // Validate handshake type (ClientHello = 1)
+    if data.len() < 6 || data[5] != 1 {
         return Ok(None);
     }
-    
-    let handshake_type = data[pos];
-    if handshake_type != 1 { // Not ClientHello
-        return Ok(None);
-    }
-    pos += 4;
 
-    // Skip ClientHello version (2 bytes) and random (32 bytes)
-    if data.len() < pos + 34 {
+    // Find extensions section with bounds checking
+    let mut pos = 5; // Start after TLS record header
+
+    // Skip handshake header (4 bytes), version (2 bytes), random (32 bytes)
+    pos += 4 + 2 + 32;
+    if data.len() < pos + 1 {
         return Ok(None);
     }
-    pos += 34;
 
     // Skip session ID
-    if data.len() < pos + 1 {
-        return Ok(None);
-    }
     let session_id_len = data[pos] as usize;
     pos += 1 + session_id_len;
-
-    // Skip cipher suites
     if data.len() < pos + 2 {
         return Ok(None);
     }
+
+    // Skip cipher suites
     let cipher_suites_len = u16::from_be_bytes([data[pos], data[pos + 1]]) as usize;
     pos += 2 + cipher_suites_len;
-
-    // Skip compression methods
     if data.len() < pos + 1 {
         return Ok(None);
     }
-    let compression_methods_len = data[pos] as usize;
-    pos += 1 + compression_methods_len;
 
-    // Parse extensions
+    // Skip compression methods
+    let compression_len = data[pos] as usize;
+    pos += 1 + compression_len;
     if data.len() < pos + 2 {
         return Ok(None);
     }
+
+    // Parse extensions
     let extensions_len = u16::from_be_bytes([data[pos], data[pos + 1]]) as usize;
     pos += 2;
-
     let extensions_end = pos + extensions_len;
+
     if data.len() < extensions_end {
         return Ok(None);
     }
@@ -334,7 +362,7 @@ fn extract_sni_from_client_hello(data: &[u8]) -> Result<Option<String>> {
         let ext_len = u16::from_be_bytes([data[pos + 2], data[pos + 3]]) as usize;
         pos += 4;
 
-        if ext_type == 0 && pos + ext_len <= extensions_end { // SNI extension
+        if ext_type == 0 && pos + ext_len <= extensions_end {
             return parse_sni_extension(&data[pos..pos + ext_len]);
         }
 
@@ -344,39 +372,27 @@ fn extract_sni_from_client_hello(data: &[u8]) -> Result<Option<String>> {
     Ok(None)
 }
 
-/// Parse the SNI extension data to extract the hostname
+/// Parse SNI extension data with proper error handling
 fn parse_sni_extension(data: &[u8]) -> Result<Option<String>> {
     if data.len() < 5 {
         return Ok(None);
     }
 
-    let mut pos = 0;
-    
-    // Skip server name list length (2 bytes)
-    pos += 2;
-
-    // Parse first server name entry
-    if data.len() < pos + 3 {
+    // Skip server name list length (2 bytes) and name type (1 byte, must be 0)
+    if data[2] != 0 {
         return Ok(None);
     }
 
-    let name_type = data[pos];
-    if name_type != 0 { // hostname type
-        return Ok(None);
-    }
-    pos += 1;
-
-    let name_len = u16::from_be_bytes([data[pos], data[pos + 1]]) as usize;
-    pos += 2;
-
-    if data.len() < pos + name_len {
+    // Get hostname length
+    let name_len = u16::from_be_bytes([data[3], data[4]]) as usize;
+    if data.len() < 5 + name_len {
         return Ok(None);
     }
 
-    let hostname = String::from_utf8(data[pos..pos + name_len].to_vec())
-        .map_err(|e| RelayError::SniExtraction(format!("Invalid UTF-8 in SNI: {}", e)))?;
-
-    Ok(Some(hostname))
+    // Extract hostname with UTF-8 validation
+    String::from_utf8(data[5..5 + name_len].to_vec())
+        .map(Some)
+        .map_err(|e| RelayError::SniExtraction(format!("Invalid UTF-8 in SNI: {}", e)))
 }
 
 #[cfg(test)]

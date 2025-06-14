@@ -6,11 +6,7 @@ pub mod daemon;
 pub mod http;
 pub mod service;
 pub mod tls;
-pub mod tls_bridge;
 pub mod upstream;
-
-#[cfg(test)]
-mod test_iroh;
 
 // Core daemon exports
 pub use daemon::GateDaemon;
@@ -25,9 +21,14 @@ pub use config::{
 pub use upstream::{InferenceRequest, UpstreamResponse};
 
 // TLS functionality (grouped for clarity)
-pub use certs::{CertificateManager, CertificateInfo, CertificateType, TlsCertData};
+pub use certs::{CertificateInfo, CertificateManager, CertificateType, TlsCertData};
 pub use tls::TlsHandler;
-pub use tls_bridge::TlsBridge;
+
+// Core error handling
+pub use hellas_gate_core::{CoreError, ErrorContext};
+
+// Daemon-specific error handling
+// Note: DaemonErrorContext trait is defined below and auto-imported
 
 /// Result type for daemon operations
 pub type Result<T> = std::result::Result<T, DaemonError>;
@@ -84,5 +85,70 @@ pub enum DaemonError {
     Disconnected(#[from] n0_watcher::Disconnected),
 
     #[error("Bind error: {0}")]
-    Bind(#[from] iroh::endpoint::BindError),
+    Bind(String),
+
+    #[error("Core error: {0}")]
+    Core(#[from] CoreError),
+}
+
+impl DaemonError {
+    /// Create a certificate error with context
+    pub fn certificate_error(message: impl Into<String>) -> Self {
+        Self::Certificate(message.into())
+    }
+
+    /// Create a P2P error with context
+    pub fn p2p_error(message: impl Into<String>) -> Self {
+        Self::P2P(message.into())
+    }
+
+    /// Create an HTTP error with context
+    pub fn http_error(message: impl Into<String>) -> Self {
+        Self::Http(message.into())
+    }
+
+    /// Create an upstream error with context
+    pub fn upstream_error(message: impl Into<String>) -> Self {
+        Self::Upstream(message.into())
+    }
+}
+
+/// Extension trait for adding context to IO operations specifically for daemon errors
+pub trait DaemonErrorContext<T> {
+    /// Add certificate-related context to an error
+    fn with_certificate_context(self, operation: &str) -> Result<T>;
+    
+    /// Add P2P-related context to an error
+    fn with_p2p_context(self, operation: &str) -> Result<T>;
+    
+    /// Add HTTP-related context to an error
+    fn with_http_context(self, operation: &str) -> Result<T>;
+}
+
+impl<T> DaemonErrorContext<T> for std::result::Result<T, std::io::Error> {
+    fn with_certificate_context(self, operation: &str) -> Result<T> {
+        self.map_err(|e| DaemonError::certificate_error(format!("{}: {}", operation, e)))
+    }
+    
+    fn with_p2p_context(self, operation: &str) -> Result<T> {
+        self.map_err(|e| DaemonError::p2p_error(format!("{}: {}", operation, e)))
+    }
+    
+    fn with_http_context(self, operation: &str) -> Result<T> {
+        self.map_err(|e| DaemonError::http_error(format!("{}: {}", operation, e)))
+    }
+}
+
+impl<T> DaemonErrorContext<T> for std::result::Result<T, serde_json::Error> {
+    fn with_certificate_context(self, operation: &str) -> Result<T> {
+        self.map_err(|e| DaemonError::certificate_error(format!("{}: {}", operation, e)))
+    }
+    
+    fn with_p2p_context(self, operation: &str) -> Result<T> {
+        self.map_err(|e| DaemonError::p2p_error(format!("{}: {}", operation, e)))
+    }
+    
+    fn with_http_context(self, operation: &str) -> Result<T> {
+        self.map_err(|e| DaemonError::http_error(format!("{}: {}", operation, e)))
+    }
 }

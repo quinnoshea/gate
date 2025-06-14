@@ -19,7 +19,7 @@ categories = ["network-programming", "cryptography"]
 
 [workspace.dependencies]
 # Core dependencies used across crates
-iroh = { git = "https://github.com/n0-computer/iroh.git", branch = "main", features = ["discovery-local-network"] }
+iroh = { version = "0.35", default-features = false, features = ["discovery-local-network"] }
 tokio = { version = "1.0", features = ["full"] }
 tokio-util = "0.7"
 futures = "0.3"
@@ -53,7 +53,7 @@ webpki-roots = "1.0"
 rcgen = "0.13"
 
 # External transport
-tonic-iroh-transport = { path = "../tonic-iroh" }
+tonic-iroh-transport = { version = "0.0" }
 tonic = "0.13"
 tonic-build = "0.13"
 

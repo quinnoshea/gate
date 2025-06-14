@@ -1,5 +1,5 @@
 //! Gate protocol buffer definitions and type conversions
-//! 
+//!
 //! This crate contains the protobuf schema definitions for the Gate P2P network
 //! and provides type conversions between protobuf types and core Gate types.
 

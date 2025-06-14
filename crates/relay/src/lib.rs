@@ -6,9 +6,10 @@
 //! 3. Forwarding raw TLS bytes to target node via P2P connection
 //! 4. Managing DNS records automatically
 
-use std::sync::Arc;
+use futures::future::BoxFuture;
 use futures::StreamExt;
 use hellas_gate_proto::pb::gate::relay::v1::relay_service_server::RelayServiceServer;
+use std::sync::Arc;
 use tonic::transport::Server;
 use tonic_iroh_transport::GrpcProtocolHandler;
 use tracing::{error, info};
@@ -18,14 +19,16 @@ pub mod config;
 pub mod error;
 pub mod https_proxy;
 pub mod service;
+pub mod stream;
 
 pub use config::RelayConfig;
-pub use error::{RelayError, Result};
+pub use error::RelayError;
 pub use service::RelayServiceImpl;
 
 // Re-export key types for convenience
 pub use cloudflare::CloudflareDnsManager;
 pub use https_proxy::{HttpsProxy, ProxyRegistry};
+pub use stream::CombinedStream;
 
 /// Simplified relay server using tonic-iroh transport
 pub struct RelayServer {
@@ -37,7 +40,7 @@ pub struct RelayServer {
 
 impl RelayServer {
     /// Create a new relay server with config and an existing iroh endpoint
-    pub async fn new(config: RelayConfig, endpoint: iroh::Endpoint) -> Result<Self> {
+    pub async fn new(config: RelayConfig, endpoint: iroh::Endpoint) -> error::Result<Self> {
         info!("Initializing relay server");
 
         // Create components
@@ -58,7 +61,7 @@ impl RelayServer {
     }
 
     /// Start the relay server
-    pub async fn run(self) -> Result<()> {
+    pub async fn run(self) -> error::Result<()> {
         info!("Starting Gate relay server");
 
         // Create relay service implementation
@@ -68,23 +71,27 @@ impl RelayServer {
         ));
 
         // Set up tonic-iroh protocol handler
-        let (handler, incoming, alpn) = GrpcProtocolHandler::for_service::<RelayServiceServer<RelayServiceImpl>>();
-        
-        info!("Relay service started on protocol: {}", String::from_utf8_lossy(&alpn));
+        let (handler, incoming, alpn) =
+            GrpcProtocolHandler::for_service::<RelayServiceServer<RelayServiceImpl>>();
 
-        // Set up router 
+        info!(
+            "Relay service started on protocol: {}",
+            String::from_utf8_lossy(&alpn)
+        );
+
+        // Set up router
         let mut router = iroh::protocol::Router::builder(self.endpoint.clone());
-        
+
         // Add relay service protocol
         router = router.accept(alpn, handler);
-        
+
         // Add TLS forwarding protocol with opportunistic registration
         let tls_forward_alpn = b"gate-tls-forward".to_vec();
         let registry_handler = TlsForwardingHandler {
             registry: self.https_proxy.registry(),
         };
         router = router.accept(&tls_forward_alpn, registry_handler);
-        
+
         let _router = router.spawn();
 
         // Start HTTPS proxy
@@ -149,25 +156,28 @@ impl RelayServer {
     /// Listen for peer discovery events and register all discovered peers
     async fn listen_for_peers(endpoint: iroh::Endpoint, registry: Arc<ProxyRegistry>) {
         info!("Starting peer discovery for automatic registration");
-        
+
         // Track registered peers to avoid spam
         let mut registered_peers = std::collections::HashSet::new();
-        
+
         // Get discovery stream from endpoint
         let mut discovery_stream = endpoint.discovery_stream();
-        
+
         loop {
             match discovery_stream.next().await {
                 Some(Ok(discovery_item)) => {
                     let peer_id = discovery_item.node_id();
-                    
+
                     // Check if already registered to prevent spam
                     if registered_peers.contains(&peer_id) {
                         continue;
                     }
-                    
-                    info!("Discovered peer: {}, registering in proxy registry", peer_id);
-                    
+
+                    info!(
+                        "Discovered peer: {}, registering in proxy registry",
+                        peer_id
+                    );
+
                     // Register with full node address including direct addresses
                     let node_addr = discovery_item.to_node_addr();
                     registry.register_node_addr(node_addr).await;
@@ -185,7 +195,6 @@ impl RelayServer {
     }
 }
 
-
 /// Simple protocol handler for TLS forwarding that registers nodes
 #[derive(Clone, Debug)]
 struct TlsForwardingHandler {
@@ -193,11 +202,14 @@ struct TlsForwardingHandler {
 }
 
 impl iroh::protocol::ProtocolHandler for TlsForwardingHandler {
-    async fn accept(&self, conn: iroh::endpoint::Connection) -> std::result::Result<(), iroh::protocol::AcceptError> {
-        // Register the connecting node opportunistically
-        if let Ok(node_id) = conn.remote_node_id() {
-            self.registry.register_node(node_id).await;
-        }
-        Ok(())
+    fn accept(&self, conn: iroh::endpoint::Connection) -> BoxFuture<'static, anyhow::Result<()>> {
+        let registry = self.registry.clone();
+        Box::pin(async move {
+            // Register the connecting node opportunistically
+            if let Ok(node_id) = conn.remote_node_id() {
+                registry.register_node(node_id).await;
+            }
+            Ok(())
+        })
     }
 }

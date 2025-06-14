@@ -2,6 +2,7 @@
 
 use anyhow::Result;
 use clap::Subcommand;
+use hellas_gate_core::{load_or_generate_identity, node_id_from_identity};
 use hellas_gate_daemon::GateDaemon;
 use hellas_gate_relay::RelayServer;
 use std::net::SocketAddr;
@@ -9,29 +10,6 @@ use std::path::PathBuf;
 use tracing::info;
 
 use crate::config;
-
-/// Load or generate identity for a component
-fn load_or_generate_identity(component_dir: &PathBuf) -> Result<Vec<u8>> {
-    let identity_file = component_dir.join("identity.key");
-
-    if identity_file.exists() {
-        let key_data = std::fs::read(&identity_file)?;
-        info!("Loaded identity from: {:?}", identity_file);
-        Ok(key_data)
-    } else {
-        // Generate new identity and save it
-        let mut rng = rand::thread_rng();
-        let secret_key = iroh::SecretKey::generate(&mut rng);
-        let key_bytes = secret_key.to_bytes();
-
-        // Create directory and save the key
-        std::fs::create_dir_all(component_dir)?;
-        std::fs::write(&identity_file, &key_bytes)?;
-        info!("Generated and saved new identity to: {:?}", identity_file);
-
-        Ok(key_bytes.to_vec())
-    }
-}
 
 #[derive(Subcommand)]
 pub enum Commands {
@@ -41,20 +19,6 @@ pub enum Commands {
         #[arg(long)]
         config: Option<PathBuf>,
     },
-
-    /// P2P networking commands (temporarily disabled during tonic-iroh migration)
-    // P2p {
-    //     /// Peer address to connect to (defaults to .peer_id file)
-    //     #[arg(long)]
-    //     peer: Option<String>,
-
-    //     /// Private key file for identity (defaults to daemon's identity)
-    //     #[arg(long)]
-    //     identity: Option<PathBuf>,
-
-    //     #[command(subcommand)]
-    //     command: P2PCommands,
-    // },
 
     /// Start the relay server
     Relay {
@@ -94,37 +58,6 @@ pub enum ConfigCommands {
         output: Option<PathBuf>,
     },
 }
-
-// Temporarily disabled during tonic-iroh migration
-// #[derive(Subcommand)]
-// pub enum P2PCommands {
-//     /// Connect to a peer and send an inference request
-//     Inference {
-//         /// Model name
-//         #[arg(long)]
-//         model: String,
-
-//         /// User message
-//         #[arg(long)]
-//         message: String,
-//     },
-
-//     /// List available models from a remote peer
-//     ListModels,
-
-//     /// Show node information
-//     Info,
-
-//     /// List connected peers
-//     Peers,
-
-//     /// Test P2P protocol connection
-//     TestConnection {
-//         /// Protocol to test (inference, relay, control)
-//         #[arg(long, default_value = "inference")]
-//         protocol: String,
-//     },
-// }
 
 #[derive(Subcommand)]
 pub enum CertCommands {
@@ -171,11 +104,6 @@ impl Commands {
 
         match self {
             Commands::Daemon { config } => start_daemon(config, data_dir).await,
-            // Commands::P2p {
-            //     peer,
-            //     identity,
-            //     command,
-            // } => command.execute(peer, identity, data_dir).await,
             Commands::Relay { bind, p2p_bind } => start_relay(bind, p2p_bind, data_dir).await,
             Commands::Config { command } => command.execute(data_dir).await,
             Commands::Cert { command } => command.execute(data_dir).await,
@@ -242,39 +170,6 @@ impl CertCommands {
     }
 }
 
-// Temporarily disabled during tonic-iroh migration
-// impl P2PCommands {
-//     pub async fn execute(
-//         self,
-//         peer: Option<String>,
-//         identity: Option<PathBuf>,
-//         state_dir: PathBuf,
-//     ) -> Result<()> {
-//         // Create shared P2P session
-//         let session = create_p2p_session(identity, state_dir.clone()).await?;
-//         let node_id = session.node_id();
-//         info!("Started P2P session with node ID: {node_id}");
-
-//         // Execute specific command with the session
-//         match self {
-//             P2PCommands::Inference { model, message } => {
-//                 let peer_addr = resolve_peer_address(peer, &state_dir).await?;
-//                 send_inference_with_session(session, peer_addr, model, message).await
-//             }
-//             P2PCommands::ListModels => {
-//                 let peer_addr = resolve_peer_address(peer, &state_dir).await?;
-//                 list_models_with_session(session, peer_addr).await
-//             }
-//             P2PCommands::Info => show_info_with_session(session).await,
-//             P2PCommands::Peers => list_peers_with_session(session).await,
-//             P2PCommands::TestConnection { protocol } => {
-//                 let peer_addr = resolve_peer_address(peer, &state_dir).await?;
-//                 test_connection_with_session(session, peer_addr, protocol).await
-//             }
-//         }
-//     }
-// }
-
 async fn start_daemon(config_file: Option<PathBuf>, data_dir: PathBuf) -> Result<()> {
     info!("Starting Gate daemon");
 
@@ -305,7 +200,7 @@ async fn start_daemon(config_file: Option<PathBuf>, data_dir: PathBuf) -> Result
 
     // Create daemon (this fully initializes and starts background services)
     let daemon = GateDaemon::new(config, identity, daemon_dir.clone()).await?;
-    
+
     // Write peer address file for relay discovery
     let node_addr = daemon.node_addr().await?;
     let peer_addr_file = daemon_dir.join("peer_addr");
@@ -313,130 +208,11 @@ async fn start_daemon(config_file: Option<PathBuf>, data_dir: PathBuf) -> Result
     info!("Saved peer address to: {:?}", peer_addr_file);
 
     // Wait for daemon shutdown (this blocks until shutdown)
-    daemon.wait_for_shutdown().await.map_err(|e| anyhow::anyhow!("Daemon error: {}", e))
+    daemon
+        .wait_for_shutdown()
+        .await
+        .map_err(|e| anyhow::anyhow!("Daemon error: {}", e))
 }
-
-/// Resolve peer address from CLI argument or daemon peer_addr file
-async fn resolve_peer_address(peer: Option<String>, data_dir: &PathBuf) -> Result<String> {
-    if let Some(peer_addr) = peer {
-        return Ok(peer_addr);
-    }
-
-    // Try to read from daemon's peer_addr file
-    let daemon_dir = data_dir.join("daemon");
-    let peer_id_file = daemon_dir.join("peer_addr");
-
-    if peer_id_file.exists() {
-        let peer_addr = std::fs::read_to_string(&peer_id_file)?.trim().to_string();
-        info!("Using peer address from daemon peer_addr file: {peer_addr}");
-        Ok(peer_addr)
-    } else {
-        Err(anyhow::anyhow!(
-            "No peer address provided and daemon peer_addr file not found. Use --peer flag or start daemon first."
-        ))
-    }
-}
-
-// Temporarily disabled during tonic-iroh migration
-// /// Create a P2P session with shared identity logic
-// async fn create_p2p_session(
-//     identity_file: Option<PathBuf>,
-//     data_dir: PathBuf,
-// ) -> Result<P2PTransport> {
-//     let mut builder = P2PTransport::builder();
-
-//     // Determine identity to use
-//     let identity = if let Some(provided_path) = identity_file {
-//         if provided_path.exists() {
-//             let key_data = std::fs::read(&provided_path)?;
-//             info!("Loaded identity from: {:?}", provided_path);
-//             key_data
-//         } else {
-//             return Err(anyhow::anyhow!(
-//                 "Identity file not found at {:?}",
-//                 provided_path
-//             ));
-//         }
-//     } else {
-//         // Use CLI component identity
-//         let cli_dir = data_dir.join("cli");
-//         load_or_generate_identity(&cli_dir)?
-//     };
-
-//     builder = builder.with_private_key(&identity)?;
-
-//     builder
-//         .build()
-//         .await
-//         .map_err(|e| anyhow::anyhow!("P2P session build failed: {e}"))
-// }
-
-// async fn send_inference_with_session(
-//     session: P2PTransport,
-//     peer_addr: String,
-//     model: String,
-//     message: String,
-// ) -> Result<()> {
-//     info!("Sending inference request to peer: {peer_addr}");
-
-//     // Parse and add peer
-//     let gate_addr: hellas_gate_core::GateAddr =
-//         peer_addr.parse().expect("Invalid peer address format");
-//     let connection_handle = session.connect_peer(&gate_addr, hellas_gate_proto::INFERENCE_PROTOCOL_V1)?;
-//     let peer_id = connection_handle.wait_connected().await?;
-//     info!("Connected to peer: {peer_id}");
-
-//     // TODO: Implement inference request with new streaming API
-//     println!("Connected to peer successfully!");
-//     println!("Model: {}, Message: {}", model, message);
-
-//     Ok(())
-// }
-
-// async fn show_info_with_session(session: P2PTransport) -> Result<()> {
-//     info!("Getting node information");
-
-//     let node_id = session.node_id();
-//     let node_addr = session.node_addr().await?;
-
-//     println!("Node ID: {node_id}");
-//     println!("Node Address: {node_addr}");
-
-//     Ok(())
-// }
-
-// async fn list_peers_with_session(session: P2PTransport) -> Result<()> {
-//     info!("Listing connected peers");
-
-//     let node_id = session.node_id();
-//     let node_addr = session.node_addr().await?;
-
-//     println!("Local node information:");
-//     println!("  Node ID: {node_id}");
-//     println!("  Node Address: {node_addr}");
-//     println!();
-//     println!("Note: Peer listing not available with current P2P transport.");
-//     println!("Connected peers are managed by the underlying Iroh endpoint.");
-
-//     Ok(())
-// }
-
-// async fn list_models_with_session(session: P2PTransport, peer_addr: String) -> Result<()> {
-//     info!("Listing models from peer: {peer_addr}");
-
-//     // Parse and add peer
-//     let gate_addr: hellas_gate_core::GateAddr =
-//         peer_addr.parse().expect("Invalid peer address format");
-//     let connection_handle = session.connect_peer(&gate_addr, hellas_gate_proto::INFERENCE_PROTOCOL_V1)?;
-//     let peer_id = connection_handle.wait_connected().await?;
-//     info!("Connected to peer: {peer_id}");
-
-//     // TODO: Implement model list request with new streaming API
-//     println!("Connected to peer successfully!");
-//     println!("List models functionality will be implemented with streaming API");
-
-//     Ok(())
-// }
 
 async fn start_relay(bind: SocketAddr, p2p_bind: SocketAddr, data_dir: PathBuf) -> Result<()> {
     info!("Starting Gate relay server");
@@ -471,7 +247,7 @@ async fn start_relay(bind: SocketAddr, p2p_bind: SocketAddr, data_dir: PathBuf) 
     // Override config with CLI arguments
     config.https.bind_addr = bind;
     config.p2p.port = p2p_bind.port();
-    
+
     // Create secret key from identity
     let key_array: [u8; 32] = identity[0..32]
         .try_into()
@@ -502,7 +278,6 @@ async fn start_relay(bind: SocketAddr, p2p_bind: SocketAddr, data_dir: PathBuf) 
     Ok(())
 }
 
-
 async fn generate_certificate(
     node_id: Option<String>,
     identity: Option<PathBuf>,
@@ -529,48 +304,24 @@ async fn generate_certificate(
     let node_id_hex = if let Some(id) = node_id {
         id
     } else {
-        // Derive node ID from private key
-        if private_key.len() == 32 {
-            let key_array: [u8; 32] = private_key[0..32]
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("Failed to convert key to array"))?;
-            let secret_key = iroh::SecretKey::from_bytes(&key_array);
-            hex::encode(secret_key.public().as_bytes())
-        } else {
-            anyhow::bail!(
-                "Private key must be 32 bytes, got {} bytes",
-                private_key.len()
-            );
-        }
+        // Derive node ID from private key using shared function
+        node_id_from_identity(&private_key)
+            .map_err(|e| anyhow::anyhow!("Failed to derive node ID: {}", e))?
     };
 
     info!("Generating certificate for node ID: {}", node_id_hex);
 
-    // Create a temporary endpoint for certificate generation
-    let secret_key = if private_key.len() == 32 {
-        let key_array: [u8; 32] = private_key[0..32]
-            .try_into()
-            .map_err(|_| anyhow::anyhow!("Failed to convert key to array"))?;
-        iroh::SecretKey::from_bytes(&key_array)
-    } else {
-        anyhow::bail!("Private key must be 32 bytes, got {} bytes", private_key.len());
-    };
-    
-    let endpoint = iroh::Endpoint::builder()
-        .secret_key(secret_key)
-        .bind()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to create endpoint: {}", e))?;
-
     // Create certificate manager and generate self-signed certificate
     let cert_dir = data_dir.join("certificates");
     let le_config = hellas_gate_daemon::LetsEncryptConfig::default();
-    let cert_manager = CertificateManager::new(le_config, endpoint, cert_dir).await
+    let cert_manager = CertificateManager::new(le_config, cert_dir)
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to create certificate manager: {}", e))?;
     let domain = format!("{}.private.hellas.ai", &node_id_hex[..16]); // Use first 16 chars like daemon
-    
+
     // Use the public API to get or create certificate (which will fall back to self-signed)
-    let cert_info = cert_manager.get_or_create_certificate(&domain, &node_id_hex, &private_key, None)
+    let cert_info = cert_manager
+        .get_or_create_certificate(&domain, &node_id_hex, &private_key, None)
         .await
         .map_err(|e| anyhow::anyhow!("Failed to generate certificate: {}", e))?;
 

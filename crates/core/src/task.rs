@@ -52,10 +52,7 @@ impl std::str::FromStr for TaskId {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TaskEvent<T> {
     /// Task has been started
-    Started {
-        task_id: TaskId,
-        message: String,
-    },
+    Started { task_id: TaskId, message: String },
     /// Progress update during task execution
     Progress {
         task_id: TaskId,
@@ -64,10 +61,7 @@ pub enum TaskEvent<T> {
         percent: Option<u8>,
     },
     /// Task completed successfully with result
-    Completed {
-        task_id: TaskId,
-        result: T,
-    },
+    Completed { task_id: TaskId, result: T },
     /// Task failed with error
     Failed {
         task_id: TaskId,
@@ -98,7 +92,9 @@ impl<T> TaskEvent<T> {
     pub fn description(&self) -> String {
         match self {
             Self::Started { message, .. } => format!("Started: {message}"),
-            Self::Progress { message, percent, .. } => {
+            Self::Progress {
+                message, percent, ..
+            } => {
                 if let Some(p) = percent {
                     format!("Progress ({p}%): {message}")
                 } else {
@@ -131,11 +127,7 @@ impl<T> TaskEvent<T> {
 
     /// Create a progress event with percentage
     #[must_use]
-    pub fn progress_with_percent(
-        task_id: TaskId,
-        message: impl Into<String>,
-        percent: u8,
-    ) -> Self {
+    pub fn progress_with_percent(task_id: TaskId, message: impl Into<String>, percent: u8) -> Self {
         Self::Progress {
             task_id,
             message: message.into(),
@@ -157,7 +149,7 @@ impl<T> TaskEvent<T> {
 }
 
 /// Key for ensuring task idempotency
-/// 
+///
 /// Tasks with the same idempotency key will return the same task ID
 /// and stream the same events, preventing duplicate work.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -267,7 +259,9 @@ impl<T> TaskStatus<T> {
                 last_message: None,
                 last_percent: None,
             },
-            TaskEvent::Progress { message, percent, .. } => Self::Running {
+            TaskEvent::Progress {
+                message, percent, ..
+            } => Self::Running {
                 last_message: Some(message.clone()),
                 last_percent: *percent,
             },
@@ -286,7 +280,7 @@ mod tests {
         let id1 = TaskId::new();
         let id2 = TaskId::new();
         assert_ne!(id1, id2);
-        
+
         let uuid = Uuid::new_v4();
         let id3 = TaskId::from_uuid(uuid);
         assert_eq!(id3.uuid(), uuid);
@@ -305,7 +299,7 @@ mod tests {
         let key1 = IdempotencyKey::new("create_dns_challenge", &["example.com", "txt_value"]);
         let key2 = IdempotencyKey::new("create_dns_challenge", &["example.com", "txt_value"]);
         let key3 = IdempotencyKey::new("create_dns_challenge", &["other.com", "txt_value"]);
-        
+
         assert_eq!(key1, key2);
         assert_ne!(key1, key3);
     }
@@ -313,15 +307,15 @@ mod tests {
     #[test]
     fn test_task_event_creation() {
         let task_id = TaskId::new();
-        
+
         let started = TaskEvent::<()>::started(task_id, "Starting task");
         assert_eq!(started.task_id(), task_id);
         assert!(!started.is_terminal());
-        
+
         let progress = TaskEvent::<()>::progress_with_percent(task_id, "Working", 50);
         assert_eq!(progress.task_id(), task_id);
         assert!(!progress.is_terminal());
-        
+
         let completed = TaskEvent::completed(task_id, "result");
         assert_eq!(completed.task_id(), task_id);
         assert!(completed.is_terminal());
@@ -331,14 +325,14 @@ mod tests {
     fn test_task_status_updates() {
         let task_id = TaskId::new();
         let mut status = TaskStatus::<String>::Pending;
-        
+
         assert!(status.is_active());
         assert!(!status.is_terminal());
-        
+
         let started_event = TaskEvent::started(task_id, "Starting");
         status = status.update_from_event(&started_event);
         assert!(matches!(status, TaskStatus::Running { .. }));
-        
+
         let progress_event = TaskEvent::progress_with_percent(task_id, "Working", 75);
         status = status.update_from_event(&progress_event);
         if let TaskStatus::Running { last_percent, .. } = &status {
@@ -346,7 +340,7 @@ mod tests {
         } else {
             panic!("Expected Running status");
         }
-        
+
         let completed_event = TaskEvent::completed(task_id, "done".to_string());
         status = status.update_from_event(&completed_event);
         assert!(status.is_terminal());

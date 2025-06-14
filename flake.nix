@@ -19,13 +19,53 @@
 
         gatePackage = pkgs.rustPlatform.buildRustPackage {
           pname = "hellas-gate-cli";
-          version = "0.1.0";
+          version = "0.0.2";
           
           src = pkgs.lib.cleanSource ./.;
           
           cargoLock = {
             lockFile = ./Cargo.lock;
+            outputHashes = {
+              "instant-acme-0.8.0" = "sha256-UF/nJ8Nxvxk2F6U689Pkv18kpfNnwBDsOnmaX9wFBCU=";
+              # "iroh-0.35.0" = "sha256-/XMexqG19KLIe13jph6054Niga2oEoR4OEDZbQSoqws=";
+              # "tonic-iroh-transport-0.0.0" = "sha256-zjbNGrICol/rKuFO1+UBFHSu9YxZbARsW6BZZBVonOc=";
+            };
           };
+
+          postPatch = ''
+            # Override specific problematic Cargo.toml files in vendored dependencies
+            # We'll patch the source after Nix extracts and vendors them
+            echo "Preparing to patch workspace lints issues..."
+          '';
+          
+          preBuild = ''
+            # Fix workspace lints inheritance issue in vendored dependencies
+            echo "Fixing workspace lints in vendored dependencies..."
+            if [ -d cargo-vendor-dir ]; then
+              echo "Found cargo-vendor-dir, looking for iroh..."
+              ls -la cargo-vendor-dir/ | grep iroh
+              
+              # First, let's find the iroh Cargo.toml and examine it
+              IROH_TOML=$(find cargo-vendor-dir -name "Cargo.toml" -path "*/iroh-*" | head -1)
+              if [ -n "$IROH_TOML" ]; then
+                echo "Found iroh Cargo.toml at: $IROH_TOML"
+                echo "Content before fix:"
+                grep -A 5 -B 5 "lints" "$IROH_TOML" || echo "No lints section found initially"
+                
+                # Remove lints references
+                sed -i.bak '/workspace\.lints/d' "$IROH_TOML"
+                sed -i.bak '/\[lints\]/,/^$/d' "$IROH_TOML"
+                
+                echo "Content after fix:"
+                grep -A 5 -B 5 "lints" "$IROH_TOML" || echo "Lints section successfully removed"
+              else
+                echo "No iroh Cargo.toml found, listing all toml files:"
+                find cargo-vendor-dir -name "Cargo.toml" | head -10
+              fi
+            else
+              echo "cargo-vendor-dir not found"
+            fi
+          '';
 
           buildInputs = with pkgs; [
             openssl
@@ -60,6 +100,7 @@
             cargo-expand
             cargo-udeps
             cargo-outdated
+            cargo-machete
             protobuf
           ];
 

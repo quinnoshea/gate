@@ -1,23 +1,25 @@
 //! Unified certificate management for Gate daemon
-//! 
+//!
 //! This module provides comprehensive certificate management including:
 //! - Certificate storage and caching
 //! - Let's Encrypt certificate generation via relay
 //! - Self-signed certificate generation as fallback
 
-use crate::{DaemonError, Result, LetsEncryptConfig};
+use crate::{DaemonError, DaemonErrorContext, LetsEncryptConfig, Result};
 use anyhow::{Context, Result as AnyhowResult};
 use base64::Engine;
 use hellas_gate_core::GateAddr;
-use iroh::Endpoint;
+use hellas_gate_proto::pb::gate::relay::v1::*;
 use rcgen::{CertificateParams, DistinguishedName, DnType, KeyPair, SanType};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::fs;
 use tokio::sync::RwLock;
 use tokio_stream::StreamExt;
+use tonic::transport::Channel;
 use tracing::{debug, info, warn};
 
 /// Certificate data for a domain
@@ -40,7 +42,6 @@ pub enum CertificateType {
 /// Unified certificate manager that handles storage, Let's Encrypt, and self-signed certificates
 #[derive(Clone)]
 pub struct CertificateManager {
-    endpoint: Endpoint,
     /// Directory to store certificates on disk
     cert_dir: PathBuf,
     /// Maps domain -> certificate info (in-memory cache)
@@ -51,16 +52,15 @@ pub struct CertificateManager {
 
 impl CertificateManager {
     /// Create a new certificate manager
-    pub async fn new(config: LetsEncryptConfig, endpoint: Endpoint, cert_dir: PathBuf) -> Result<Self> {
+    pub async fn new(config: LetsEncryptConfig, cert_dir: PathBuf) -> Result<Self> {
         // Ensure certificate directory exists
         if !cert_dir.exists() {
             fs::create_dir_all(&cert_dir).await
-                .map_err(|e| DaemonError::Certificate(format!("Failed to create cert directory: {}", e)))?;
+                .with_certificate_context("Failed to create cert directory")?;
             info!("Created certificate directory: {}", cert_dir.display());
         }
 
         let manager = Self {
-            endpoint,
             cert_dir,
             certificates: Arc::new(RwLock::new(HashMap::new())),
             letsencrypt_config: config,
@@ -73,7 +73,7 @@ impl CertificateManager {
     }
 
     /// Get or create a certificate for the given domain
-    /// 
+    ///
     /// This method will:
     /// 1. Check if we have a valid cached certificate
     /// 2. Try to get a Let's Encrypt certificate via relay if available
@@ -93,13 +93,19 @@ impl CertificateManager {
 
         // Try Let's Encrypt first if relay is available
         if let Some(relay) = relay_addr {
-            match self.request_letsencrypt_certificate(relay, domain, node_id).await {
+            match self
+                .request_letsencrypt_certificate(relay, domain, node_id)
+                .await
+            {
                 Ok(cert_info) => {
                     self.store_certificate(cert_info.clone()).await?;
                     return Ok(cert_info);
                 }
                 Err(e) => {
-                    warn!("Let's Encrypt certificate request failed: {}, falling back to self-signed", e);
+                    warn!(
+                        "Let's Encrypt certificate request failed: {}, falling back to self-signed",
+                        e
+                    );
                 }
             }
         }
@@ -152,23 +158,32 @@ impl CertificateManager {
     pub async fn upgrade_certificate(
         &self,
         domain: &str,
-        mut relay_client: hellas_gate_proto::pb::gate::relay::v1::relay_service_client::RelayServiceClient<tonic::transport::Channel>,
+        mut relay_client: relay_service_client::RelayServiceClient<Channel>,
     ) -> Result<CertificateInfo> {
         // Check if we have a self-signed certificate for this domain
         let existing_cert = self.get_certificate(domain).await;
         match existing_cert {
             Some(cert_info) if cert_info.cert_type == CertificateType::SelfSigned => {
-                info!("Attempting to upgrade self-signed certificate to Let's Encrypt for domain: {}", domain);
-                
+                info!(
+                    "Attempting to upgrade self-signed certificate to Let's Encrypt for domain: {}",
+                    domain
+                );
+
                 // Extract node_id from existing certificate
                 let node_id = &cert_info.node_id;
-                
+
                 // Attempt to request Let's Encrypt certificate via relay
-                match self.request_letsencrypt_via_relay(&mut relay_client, domain, node_id).await {
+                match self
+                    .request_letsencrypt_via_relay(&mut relay_client, domain, node_id)
+                    .await
+                {
                     Ok(le_cert_info) => {
                         // Store the new Let's Encrypt certificate
                         self.store_certificate(le_cert_info.clone()).await?;
-                        info!("Successfully upgraded certificate for domain: {} to Let's Encrypt", domain);
+                        info!(
+                            "Successfully upgraded certificate for domain: {} to Let's Encrypt",
+                            domain
+                        );
                         Ok(le_cert_info)
                     }
                     Err(e) => {
@@ -178,34 +193,43 @@ impl CertificateManager {
                 }
             }
             Some(cert_info) if cert_info.cert_type == CertificateType::LetsEncrypt => {
-                info!("Domain {} already has Let's Encrypt certificate, no upgrade needed", domain);
+                info!(
+                    "Domain {} already has Let's Encrypt certificate, no upgrade needed",
+                    domain
+                );
                 Ok(cert_info)
             }
-            None => {
-                Err(DaemonError::Certificate(format!("No certificate found for domain: {}", domain)))
-            }
-            _ => {
-                Err(DaemonError::Certificate(format!("Unexpected certificate state for domain: {}", domain)))
-            }
+            None => Err(DaemonError::certificate_error(format!(
+                "No certificate found for domain: {}",
+                domain
+            ))),
+            _ => Err(DaemonError::certificate_error(format!(
+                "Unexpected certificate state for domain: {}",
+                domain
+            ))),
         }
     }
 
     /// Request Let's Encrypt certificate via relay service client
     async fn request_letsencrypt_via_relay(
         &self,
-        relay_client: &mut hellas_gate_proto::pb::gate::relay::v1::relay_service_client::RelayServiceClient<tonic::transport::Channel>,
+        relay_client: &mut relay_service_client::RelayServiceClient<Channel>,
         domain: &str,
         node_id: &str,
     ) -> Result<CertificateInfo> {
-        info!("Requesting Let's Encrypt certificate for domain: {} via relay service", domain);
+        info!(
+            "Requesting Let's Encrypt certificate for domain: {} via relay service",
+            domain
+        );
 
         // 1. Initialize ACME client
         let acme_url = if self.letsencrypt_config.staging {
             instant_acme::LetsEncrypt::Staging.url()
         } else {
             instant_acme::LetsEncrypt::Production.url()
-        }.to_string();
-        
+        }
+        .to_string();
+
         let contact_email = format!("mailto:{}", self.letsencrypt_config.email);
         let (account, _credentials) = instant_acme::Account::create(
             &instant_acme::NewAccount {
@@ -217,28 +241,34 @@ impl CertificateManager {
             None,
         )
         .await?;
-        
+
         // 2. Create order for domain
         let identifier = instant_acme::Identifier::Dns(domain.to_owned());
         let mut order = account
             .new_order(&instant_acme::NewOrder::new(&[identifier]))
             .await?;
-        
+
         // 3. Get authorizations and DNS challenge
         let mut authorizations = order.authorizations();
-        let mut authz = authorizations.next().await
-            .ok_or_else(|| DaemonError::Certificate("No authorizations found".to_string()))??;
-        
+        let mut authz = authorizations
+            .next()
+            .await
+            .ok_or_else(|| DaemonError::certificate_error("No authorizations found"))??;
+
         let mut challenge = authz
             .challenge(instant_acme::ChallengeType::Dns01)
-            .ok_or_else(|| DaemonError::Certificate("No DNS challenge found".to_string()))?;
-        
+            .ok_or_else(|| DaemonError::certificate_error("No DNS challenge found"))?;
+
         let dns_value = challenge.key_authorization().dns_value();
-        
-        info!("Got DNS challenge for domain: {}, challenge value: {}", challenge.identifier(), dns_value);
+
+        info!(
+            "Got DNS challenge for domain: {}, challenge value: {}",
+            challenge.identifier(),
+            dns_value
+        );
 
         // 4. Create DNS TXT record via relay
-        let challenge_request = hellas_gate_proto::pb::gate::relay::v1::CreateDnsChallengeRequest {
+        let challenge_request = CreateDnsChallengeRequest {
             domain: format!("_acme-challenge.{}", domain),
             txt_value: dns_value.clone(),
             ttl_seconds: 60, // Short TTL for quick propagation
@@ -253,12 +283,12 @@ impl CertificateManager {
         let mut record_id = None;
         while let Some(response) = challenge_stream.next().await {
             let response = response?;
-            
+
             match response.response {
-                Some(hellas_gate_proto::pb::gate::relay::v1::create_dns_challenge_response::Response::Progress(progress)) => {
+                Some(create_dns_challenge_response::Response::Progress(progress)) => {
                     info!("DNS challenge progress for {}: {} - {}", domain, progress.stage, progress.message);
                 }
-                Some(hellas_gate_proto::pb::gate::relay::v1::create_dns_challenge_response::Response::Complete(complete)) => {
+                Some(create_dns_challenge_response::Response::Complete(complete)) => {
                     if complete.verified {
                         record_id = Some(complete.record_id);
                         info!("DNS challenge completed for domain: {}, record_id: {}", domain, record_id.as_ref().unwrap());
@@ -267,7 +297,7 @@ impl CertificateManager {
                         return Err(DaemonError::Certificate(format!("DNS challenge verification failed for domain: {}", domain)));
                     }
                 }
-                Some(hellas_gate_proto::pb::gate::relay::v1::create_dns_challenge_response::Response::Error(error)) => {
+                Some(create_dns_challenge_response::Response::Error(error)) => {
                     return Err(DaemonError::Certificate(format!("DNS challenge error for domain {}: {}", domain, error.message)));
                 }
                 None => {
@@ -277,15 +307,18 @@ impl CertificateManager {
         }
 
         let record_id = record_id.ok_or_else(|| {
-            DaemonError::Certificate(format!("DNS challenge did not complete successfully for domain: {}", domain))
+            DaemonError::Certificate(format!(
+                "DNS challenge did not complete successfully for domain: {}",
+                domain
+            ))
         })?;
 
         // 6. Check DNS propagation using streaming RPC
-        let propagation_request = hellas_gate_proto::pb::gate::relay::v1::CheckDnsPropagationRequest {
-            domain: format!("_acme-challenge.{}", domain),
-            expected_value: dns_value.clone(),
-            timeout_seconds: 300, // 5 minutes
-        };
+        let propagation_request = CheckDnsPropagationRequest {
+                domain: format!("_acme-challenge.{}", domain),
+                expected_value: dns_value.clone(),
+                timeout_seconds: 300, // 5 minutes
+            };
 
         let mut propagation_stream = relay_client
             .check_dns_propagation(propagation_request)
@@ -295,12 +328,12 @@ impl CertificateManager {
         let mut propagation_success = false;
         while let Some(response) = propagation_stream.next().await {
             let response = response?;
-            
+
             match response.response {
-                Some(hellas_gate_proto::pb::gate::relay::v1::check_dns_propagation_response::Response::Progress(progress)) => {
+                Some(check_dns_propagation_response::Response::Progress(progress)) => {
                     info!("DNS propagation progress for {}: {} - {}", domain, progress.stage, progress.message);
                 }
-                Some(hellas_gate_proto::pb::gate::relay::v1::check_dns_propagation_response::Response::Complete(complete)) => {
+                Some(check_dns_propagation_response::Response::Complete(complete)) => {
                     if complete.propagated {
                         propagation_success = true;
                         info!("DNS propagation completed for domain: {} after {} attempts ({} seconds)", 
@@ -311,7 +344,7 @@ impl CertificateManager {
                     }
                     break;
                 }
-                Some(hellas_gate_proto::pb::gate::relay::v1::check_dns_propagation_response::Response::Error(error)) => {
+                Some(check_dns_propagation_response::Response::Error(error)) => {
                     return Err(DaemonError::Certificate(format!("DNS propagation check error for domain {}: {}", domain, error.message)));
                 }
                 None => {
@@ -321,50 +354,63 @@ impl CertificateManager {
         }
 
         if !propagation_success {
-            return Err(DaemonError::Certificate(format!("DNS propagation failed for domain: {}", domain)));
+            return Err(DaemonError::Certificate(format!(
+                "DNS propagation failed for domain: {}",
+                domain
+            )));
         }
 
         // 7. Complete ACME challenge validation
         challenge.set_ready().await?;
-        
-        // 8. Wait for order to be ready 
+
+        // 8. Wait for order to be ready
         let mut order = order;
         let mut status_checked = 0;
         while let instant_acme::OrderStatus::Pending = order.state().status {
             if status_checked >= 5 {
-                return Err(DaemonError::Certificate("Order remained pending for too long".to_string()));
+                return Err(DaemonError::certificate_error(
+                    "Order remained pending for too long"
+                ));
             }
-            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+            tokio::time::sleep(Duration::from_millis(250)).await;
             status_checked += 1;
             order.refresh().await?;
         }
-        
+
         if order.state().status != instant_acme::OrderStatus::Ready {
-            return Err(DaemonError::Certificate(format!("Order status is not ready: {:?}", order.state().status)));
+            return Err(DaemonError::Certificate(format!(
+                "Order status is not ready: {:?}",
+                order.state().status
+            )));
         }
-        
-        // 9. Finalize order 
+
+        // 9. Finalize order
         let private_key_pem = order.finalize().await?;
-        
+
         // 10. Download certificate
         let cert_chain_pem = loop {
             match order.certificate().await? {
                 Some(cert_chain_pem) => break cert_chain_pem,
-                None => tokio::time::sleep(std::time::Duration::from_secs(1)).await,
+                None => tokio::time::sleep(Duration::from_secs(1)).await,
             }
         };
-        
-        
-        info!("Successfully retrieved Let's Encrypt certificate for domain: {}", domain);
+
+        info!(
+            "Successfully retrieved Let's Encrypt certificate for domain: {}",
+            domain
+        );
 
         // 11. Clean up DNS records via relay
-        let cleanup_request = hellas_gate_proto::pb::gate::relay::v1::CleanupDnsChallengeRequest {
+        let cleanup_request = CleanupDnsChallengeRequest {
             domain: format!("_acme-challenge.{}", domain),
             record_id,
         };
 
         if let Err(e) = relay_client.cleanup_dns_challenge(cleanup_request).await {
-            warn!("Failed to cleanup DNS challenge records for domain {}: {}", domain, e);
+            warn!(
+                "Failed to cleanup DNS challenge records for domain {}: {}",
+                domain, e
+            );
             // Don't fail the whole process for cleanup errors
         } else {
             info!("Cleaned up DNS challenge records for domain: {}", domain);
@@ -381,7 +427,6 @@ impl CertificateManager {
 
         Ok(cert_info)
     }
-
 
     /// List all stored domains
     pub async fn list_domains(&self) -> Vec<String> {
@@ -415,12 +460,11 @@ impl CertificateManager {
     /// Load all certificates from disk into memory
     async fn load_certificates_from_disk(&self) -> Result<()> {
         let mut entries = fs::read_dir(&self.cert_dir).await
-            .map_err(|e| DaemonError::Certificate(format!("Failed to read cert directory: {}", e)))?;
+            .with_certificate_context("Failed to read cert directory")?;
 
         let mut loaded_count = 0;
         while let Some(entry) = entries.next_entry().await
-            .map_err(|e| DaemonError::Certificate(format!("Failed to read cert directory entry: {}", e)))? {
-            
+            .with_certificate_context("Failed to read cert directory entry")? {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("json") {
                 match self.load_certificate_from_file(&path).await {
@@ -446,24 +490,28 @@ impl CertificateManager {
     /// Load a single certificate from a JSON file
     async fn load_certificate_from_file(&self, path: &std::path::Path) -> Result<CertificateInfo> {
         let content = fs::read_to_string(path).await
-            .map_err(|e| DaemonError::Certificate(format!("Failed to read certificate file: {}", e)))?;
-        
+            .with_certificate_context("Failed to read certificate file")?;
+
         serde_json::from_str(&content)
-            .map_err(|e| DaemonError::Certificate(format!("Failed to parse certificate JSON: {}", e)))
+            .with_certificate_context("Failed to parse certificate JSON")
     }
 
     /// Save a certificate to disk
     async fn save_certificate_to_disk(&self, cert_info: &CertificateInfo) -> Result<()> {
         let filename = format!("{}.json", cert_info.domain.replace("*", "wildcard"));
         let path = self.cert_dir.join(filename);
-        
+
         let json = serde_json::to_string_pretty(cert_info)
-            .map_err(|e| DaemonError::Certificate(format!("Failed to serialize certificate: {}", e)))?;
-        
+            .with_certificate_context("Failed to serialize certificate")?;
+
         fs::write(&path, json).await
-            .map_err(|e| DaemonError::Certificate(format!("Failed to write certificate to disk: {}", e)))?;
-        
-        debug!("Saved certificate for domain {} to {}", cert_info.domain, path.display());
+            .with_certificate_context("Failed to write certificate to disk")?;
+
+        debug!(
+            "Saved certificate for domain {} to {}",
+            cert_info.domain,
+            path.display()
+        );
         Ok(())
     }
 
@@ -474,7 +522,10 @@ impl CertificateManager {
         domain: &str,
         node_id: &str,
     ) -> Result<CertificateInfo> {
-        info!("Requesting Let's Encrypt certificate for domain: {} via relay: {}", domain, relay_addr.id);
+        info!(
+            "Requesting Let's Encrypt certificate for domain: {} via relay: {}",
+            domain, relay_addr.id
+        );
 
         // TODO: Connect to relay using tonic-iroh
         // For now, skip the connection and return mock certificate
@@ -490,7 +541,7 @@ impl CertificateManager {
         // For now, return mock certificate
         let mock_cert_pem = format!("-----BEGIN CERTIFICATE-----\nMOCK LETSENCRYPT CERTIFICATE FOR {}\n-----END CERTIFICATE-----", domain);
         let mock_key_pem = format!("-----BEGIN PRIVATE KEY-----\nMOCK LETSENCRYPT PRIVATE KEY FOR {}\n-----END PRIVATE KEY-----", domain);
-        
+
         let cert_info = CertificateInfo {
             domain: domain.to_string(),
             cert_pem: mock_cert_pem,
@@ -510,10 +561,13 @@ impl CertificateManager {
         node_id: &str,
         p2p_private_key: &[u8],
     ) -> Result<CertificateInfo> {
-        info!("Generating self-signed TLS certificate for domain: {}", domain);
+        info!(
+            "Generating self-signed TLS certificate for domain: {}",
+            domain
+        );
 
         let mut params = CertificateParams::new(vec![domain.to_string()])
-            .map_err(|e| DaemonError::Certificate(format!("Failed to create certificate params: {}", e)))?;
+            .map_err(|e| DaemonError::certificate_error(format!("Failed to create certificate params: {}", e)))?;
 
         // Set certificate validity period (90 days)
         let now = time::OffsetDateTime::now_utc();
@@ -529,14 +583,15 @@ impl CertificateManager {
 
         // Add SAN (Subject Alternative Names)
         params.subject_alt_names = vec![
-            SanType::DnsName(
-                domain.try_into()
-                    .map_err(|e| DaemonError::Certificate(format!("Failed to convert domain to DNS name: {:?}", e)))?,
-            ),
-            SanType::DnsName(
-                "localhost".try_into()
-                    .map_err(|e| DaemonError::Certificate(format!("Failed to convert localhost to DNS name: {:?}", e)))?,
-            ),
+            SanType::DnsName(domain.try_into().map_err(|e| {
+                DaemonError::Certificate(format!("Failed to convert domain to DNS name: {:?}", e))
+            })?),
+            SanType::DnsName("localhost".try_into().map_err(|e| {
+                DaemonError::Certificate(format!(
+                    "Failed to convert localhost to DNS name: {:?}",
+                    e
+                ))
+            })?),
         ];
 
         // Set key usage
@@ -548,11 +603,11 @@ impl CertificateManager {
 
         // Create a key pair from the P2P private key
         let key_pair = Self::derive_key_pair_from_p2p_key(p2p_private_key)
-            .map_err(|e| DaemonError::Certificate(format!("Failed to derive key pair: {}", e)))?;
+            .map_err(|e| DaemonError::certificate_error(format!("Failed to derive key pair: {}", e)))?;
 
         // Generate the certificate
         let cert = params.self_signed(&key_pair)
-            .map_err(|e| DaemonError::Certificate(format!("Failed to generate certificate: {}", e)))?;
+            .map_err(|e| DaemonError::certificate_error(format!("Failed to generate certificate: {}", e)))?;
 
         let cert_pem = cert.pem();
         let key_pem = key_pair.serialize_pem();
@@ -565,12 +620,15 @@ impl CertificateManager {
             cert_type: CertificateType::SelfSigned,
         };
 
-        info!("Successfully generated self-signed certificate for {}", domain);
+        info!(
+            "Successfully generated self-signed certificate for {}",
+            domain
+        );
         Ok(cert_info)
     }
 
     /// Derive a TLS key pair from the P2P private key
-    /// 
+    ///
     /// This uses the P2P key as a seed to generate a deterministic RSA key pair
     fn derive_key_pair_from_p2p_key(p2p_key: &[u8]) -> AnyhowResult<KeyPair> {
         // Use the P2P key as a seed for deterministic key generation
@@ -589,29 +647,6 @@ impl CertificateManager {
         warn!("P2P key length: {} bytes", p2p_key.len());
 
         KeyPair::generate().context("Failed to generate ECDSA key pair")
-    }
-
-    /// Create DNS challenge through relay
-    async fn create_dns_challenge(
-        &self,
-        _relay_addr: &GateAddr,
-        _domain: &str,
-        _txt_value: &str,
-    ) -> Result<()> {
-        // TODO: Implement using new protobuf RPC
-        info!("DNS challenge creation not yet implemented with new RPC framework");
-        Ok(())
-    }
-
-    /// Clean up DNS challenge through relay
-    async fn cleanup_dns_challenge(
-        &self,
-        _relay_addr: &GateAddr,
-        _domain: &str,
-    ) -> Result<()> {
-        // TODO: Implement using new protobuf RPC
-        info!("DNS challenge cleanup not yet implemented with new RPC framework");
-        Ok(())
     }
 }
 
@@ -656,7 +691,7 @@ impl TlsCertData {
         let lines: Vec<&str> = pem.lines().collect();
         let mut in_cert = false;
         let mut base64_data = String::new();
-        
+
         for line in lines {
             let line = line.trim();
             if line == "-----BEGIN CERTIFICATE-----" {
@@ -670,16 +705,16 @@ impl TlsCertData {
                 base64_data.push_str(line);
             }
         }
-        
+
         if base64_data.is_empty() {
             return Err(anyhow::anyhow!("No certificate data found in PEM"));
         }
-        
+
         // Decode base64 to get DER bytes
         let der_bytes = base64::engine::general_purpose::STANDARD
             .decode(&base64_data)
             .context("Failed to decode base64 certificate data")?;
-            
+
         Ok(CertificateDer::from(der_bytes))
     }
 
@@ -688,7 +723,7 @@ impl TlsCertData {
         let lines: Vec<&str> = pem.lines().collect();
         let mut in_key = false;
         let mut base64_data = String::new();
-        
+
         for line in lines {
             let line = line.trim();
             if line == "-----BEGIN PRIVATE KEY-----" {
@@ -702,16 +737,16 @@ impl TlsCertData {
                 base64_data.push_str(line);
             }
         }
-        
+
         if base64_data.is_empty() {
             return Err(anyhow::anyhow!("No private key data found in PEM"));
         }
-        
+
         // Decode base64 to get DER bytes
         let der_bytes = base64::engine::general_purpose::STANDARD
             .decode(&base64_data)
             .context("Failed to decode base64 private key data")?;
-            
+
         PrivateKeyDer::try_from(der_bytes)
             .map_err(|e| anyhow::anyhow!("Invalid private key format: {}", e))
     }

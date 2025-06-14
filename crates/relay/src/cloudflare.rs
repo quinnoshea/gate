@@ -74,7 +74,6 @@ impl CloudflareDnsManager {
         Ok(manager)
     }
 
-
     /// Create a DNS challenge record for Let's Encrypt ACME
     pub async fn create_dns_challenge(&self, domain: &str, token: &str) -> Result<String> {
         let challenge_name = domain.to_string();
@@ -131,7 +130,10 @@ impl CloudflareDnsManager {
     /// Remove DNS challenge record by domain name
     pub async fn cleanup_dns_challenge_by_domain(&self, domain: &str) -> Result<()> {
         let challenge_name = domain.to_string();
-        info!("Cleaning up DNS challenge record for domain: {}", challenge_name);
+        info!(
+            "Cleaning up DNS challenge record for domain: {}",
+            challenge_name
+        );
 
         // List records to find the challenge record
         let records = self.list_dns_records(Some(&challenge_name)).await?;
@@ -151,7 +153,6 @@ impl CloudflareDnsManager {
 
         Ok(())
     }
-
 
     /// Verify API token has necessary permissions
     async fn verify_api_access(&self) -> Result<()> {
@@ -329,7 +330,10 @@ impl CloudflareDnsManager {
                         return Ok(true);
                     }
                 }
-                debug!("DNS record found but value doesn't match for {}", challenge_name);
+                debug!(
+                    "DNS record found but value doesn't match for {}",
+                    challenge_name
+                );
                 Ok(false)
             }
             Err(e) => {

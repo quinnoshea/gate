@@ -2,10 +2,11 @@
 
 use crate::cloudflare::CloudflareDnsManager;
 use hellas_gate_proto::pb::gate::{
-    relay::v1::{relay_service_server::RelayService, *, check_dns_propagation_response},
     common::v1::{self as common, error::ErrorCode},
+    relay::v1::{check_dns_propagation_response, relay_service_server::RelayService, *},
 };
 use std::sync::Arc;
+use std::time::Duration;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
 use tracing::{error, info, warn};
@@ -17,10 +18,10 @@ fn is_valid_challenge_domain(domain: &str) -> bool {
     if !domain.ends_with(".private.hellas.ai") {
         return false;
     }
-    
+
     // Extract the ID part (everything before .private.hellas.ai)
     let id_part = domain.strip_suffix(".private.hellas.ai").unwrap();
-    
+
     // Validate the ID part:
     // - Must not be empty
     // - Must not contain dots (only one level of subdomain allowed)
@@ -28,9 +29,11 @@ fn is_valid_challenge_domain(domain: &str) -> bool {
     if id_part.is_empty() || id_part.contains('.') {
         return false;
     }
-    
+
     // Check that all characters are valid
-    id_part.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    id_part
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
 }
 
 /// Implementation of RelayService for handling DNS challenges
@@ -42,7 +45,10 @@ pub struct RelayServiceImpl {
 
 impl RelayServiceImpl {
     /// Create a new RelayService implementation
-    pub fn new(dns_manager: Arc<CloudflareDnsManager>, proxy_registry: Arc<crate::https_proxy::ProxyRegistry>) -> Self {
+    pub fn new(
+        dns_manager: Arc<CloudflareDnsManager>,
+        proxy_registry: Arc<crate::https_proxy::ProxyRegistry>,
+    ) -> Self {
         info!("Creating RelayService instance");
         Self {
             dns_manager,
@@ -53,7 +59,6 @@ impl RelayServiceImpl {
 
 #[tonic::async_trait]
 impl RelayService for RelayServiceImpl {
-
     type CreateDnsChallengeStream = ReceiverStream<Result<CreateDnsChallengeResponse, Status>>;
 
     async fn create_dns_challenge(
@@ -62,16 +67,20 @@ impl RelayService for RelayServiceImpl {
     ) -> Result<Response<Self::CreateDnsChallengeStream>, Status> {
         let req = request.into_inner();
         let (tx, rx) = tokio::sync::mpsc::channel(16);
-        
+
         // Security: Only allow DNS challenges for domains matching [id].private.hellas.ai
         if !is_valid_challenge_domain(&req.domain) {
             error!("DNS challenge rejected for invalid domain: {}", req.domain);
-            return Err(Status::permission_denied(
-                format!("DNS challenges only allowed for domains matching [id].private.hellas.ai, got: {}", req.domain)
-            ));
+            return Err(Status::permission_denied(format!(
+                "DNS challenges only allowed for domains matching [id].private.hellas.ai, got: {}",
+                req.domain
+            )));
         }
-        
-        info!("Creating DNS challenge for domain: {} with value: {}", req.domain, req.txt_value);
+
+        info!(
+            "Creating DNS challenge for domain: {} with value: {}",
+            req.domain, req.txt_value
+        );
 
         // Send progress update
         let progress_response = CreateDnsChallengeResponse {
@@ -80,35 +89,44 @@ impl RelayService for RelayServiceImpl {
                     stage: "creating".to_string(),
                     message: "Creating DNS TXT record".to_string(),
                     estimated_seconds_remaining: 30,
-                }
+                },
             )),
         };
-        
+
         if tx.send(Ok(progress_response)).await.is_err() {
             return Err(Status::internal("Stream closed"));
         }
 
-        let final_response = match self.dns_manager.create_dns_challenge(&req.domain, &req.txt_value).await {
+        let final_response = match self
+            .dns_manager
+            .create_dns_challenge(&req.domain, &req.txt_value)
+            .await
+        {
             Ok(record_id) => {
-                info!("Successfully created DNS TXT record for {}: {}", req.domain, record_id);
+                info!(
+                    "Successfully created DNS TXT record for {}: {}",
+                    req.domain, record_id
+                );
                 CreateDnsChallengeResponse {
                     response: Some(create_dns_challenge_response::Response::Complete(
                         create_dns_challenge_response::ChallengeComplete {
                             record_id: record_id.to_string(),
                             propagation_estimate_seconds: 60, // Standard DNS propagation time
                             verified: true,
-                        }
+                        },
                     )),
                 }
             }
             Err(e) => {
                 error!("Failed to create DNS TXT record for {}: {}", req.domain, e);
                 CreateDnsChallengeResponse {
-                    response: Some(create_dns_challenge_response::Response::Error(common::Error {
-                        code: ErrorCode::DnsChallengeFailed as i32,
-                        message: format!("DNS challenge failed: {}", e),
-                        details: std::collections::HashMap::new(),
-                    })),
+                    response: Some(create_dns_challenge_response::Response::Error(
+                        common::Error {
+                            code: ErrorCode::DnsChallengeFailed as i32,
+                            message: format!("DNS challenge failed: {}", e),
+                            details: std::collections::HashMap::new(),
+                        },
+                    )),
                 }
             }
         };
@@ -125,15 +143,16 @@ impl RelayService for RelayServiceImpl {
         request: Request<CleanupDnsChallengeRequest>,
     ) -> Result<Response<CleanupDnsChallengeResponse>, Status> {
         let req = request.into_inner();
-        
+
         // Security: Only allow DNS cleanup for domains matching [id].private.hellas.ai
         if !is_valid_challenge_domain(&req.domain) {
             error!("DNS cleanup rejected for invalid domain: {}", req.domain);
-            return Err(Status::permission_denied(
-                format!("DNS cleanup only allowed for domains matching [id].private.hellas.ai, got: {}", req.domain)
-            ));
+            return Err(Status::permission_denied(format!(
+                "DNS cleanup only allowed for domains matching [id].private.hellas.ai, got: {}",
+                req.domain
+            )));
         }
-        
+
         info!("Cleaning up DNS challenge for domain: {}", req.domain);
 
         let result = if !req.record_id.is_empty() {
@@ -141,7 +160,9 @@ impl RelayService for RelayServiceImpl {
             self.dns_manager.cleanup_dns_challenge(&req.record_id).await
         } else {
             // Cleanup by domain
-            self.dns_manager.cleanup_dns_challenge_by_domain(&req.domain).await
+            self.dns_manager
+                .cleanup_dns_challenge_by_domain(&req.domain)
+                .await
         };
 
         let response = match result {
@@ -149,9 +170,7 @@ impl RelayService for RelayServiceImpl {
                 info!("Successfully cleaned up DNS TXT record for {}", req.domain);
                 CleanupDnsChallengeResponse {
                     result: Some(cleanup_dns_challenge_response::Result::Success(
-                        cleanup_dns_challenge_response::CleanupSuccess {
-                            records_removed: 1,
-                        }
+                        cleanup_dns_challenge_response::CleanupSuccess { records_removed: 1 },
                     )),
                 }
             }
@@ -160,9 +179,7 @@ impl RelayService for RelayServiceImpl {
                 // Don't fail cleanup operations - return success anyway
                 CleanupDnsChallengeResponse {
                     result: Some(cleanup_dns_challenge_response::Result::Success(
-                        cleanup_dns_challenge_response::CleanupSuccess {
-                            records_removed: 0,
-                        }
+                        cleanup_dns_challenge_response::CleanupSuccess { records_removed: 0 },
                     )),
                 }
             }
@@ -179,47 +196,63 @@ impl RelayService for RelayServiceImpl {
     ) -> Result<Response<Self::CheckDnsPropagationStream>, Status> {
         let req = request.into_inner();
         let (tx, rx) = tokio::sync::mpsc::channel(16);
-        
+
         // Security: Only allow DNS propagation checks for domains matching [id].private.hellas.ai
         if !is_valid_challenge_domain(&req.domain) {
-            error!("DNS propagation check rejected for invalid domain: {}", req.domain);
+            error!(
+                "DNS propagation check rejected for invalid domain: {}",
+                req.domain
+            );
             return Err(Status::permission_denied(
                 format!("DNS propagation checks only allowed for domains matching [id].private.hellas.ai, got: {}", req.domain)
             ));
         }
-        
-        info!("Starting DNS propagation check for domain: {} with value: {}", req.domain, req.expected_value);
+
+        info!(
+            "Starting DNS propagation check for domain: {} with value: {}",
+            req.domain, req.expected_value
+        );
 
         let dns_manager = self.dns_manager.clone();
         let domain = req.domain;
         let expected_value = req.expected_value;
-        let timeout_seconds = if req.timeout_seconds > 0 { req.timeout_seconds } else { 300 }; // Default 5 minutes
-        
+        let timeout_seconds = if req.timeout_seconds > 0 {
+            req.timeout_seconds
+        } else {
+            300
+        }; // Default 5 minutes
+
         tokio::spawn(async move {
             let start_time = std::time::Instant::now();
             let max_attempts = (timeout_seconds / 10).max(1) as u32; // Check every 10 seconds
             let mut attempt = 1;
-            
+
             loop {
                 // Send progress update
                 let progress_response = CheckDnsPropagationResponse {
                     response: Some(check_dns_propagation_response::Response::Progress(
                         check_dns_propagation_response::PropagationProgress {
                             stage: "checking".to_string(),
-                            message: format!("Checking DNS propagation (attempt {}/{})", attempt, max_attempts),
+                            message: format!(
+                                "Checking DNS propagation (attempt {}/{})",
+                                attempt, max_attempts
+                            ),
                             attempt: attempt as i32,
                             max_attempts: max_attempts as i32,
                             next_check_seconds: if attempt < max_attempts { 10 } else { 0 },
-                        }
+                        },
                     )),
                 };
-                
+
                 if tx.send(Ok(progress_response)).await.is_err() {
                     return; // Stream closed
                 }
 
                 // Check DNS propagation
-                match dns_manager.check_dns_propagation(&domain, &expected_value).await {
+                match dns_manager
+                    .check_dns_propagation(&domain, &expected_value)
+                    .await
+                {
                     Ok(true) => {
                         // Success! DNS has propagated
                         let elapsed = start_time.elapsed().as_secs() as i32;
@@ -229,12 +262,15 @@ impl RelayService for RelayServiceImpl {
                                     propagated: true,
                                     total_attempts: attempt as i32,
                                     elapsed_seconds: elapsed,
-                                }
+                                },
                             )),
                         };
-                        
+
                         let _ = tx.send(Ok(complete_response)).await;
-                        info!("DNS propagation confirmed for {} after {} attempts ({} seconds)", domain, attempt, elapsed);
+                        info!(
+                            "DNS propagation confirmed for {} after {} attempts ({} seconds)",
+                            domain, attempt, elapsed
+                        );
                         return;
                     }
                     Ok(false) => {
@@ -248,25 +284,30 @@ impl RelayService for RelayServiceImpl {
                                         propagated: false,
                                         total_attempts: attempt as i32,
                                         elapsed_seconds: elapsed,
-                                    }
+                                    },
                                 )),
                             };
-                            
+
                             let _ = tx.send(Ok(complete_response)).await;
-                            warn!("DNS propagation timed out for {} after {} attempts ({} seconds)", domain, attempt, elapsed);
+                            warn!(
+                                "DNS propagation timed out for {} after {} attempts ({} seconds)",
+                                domain, attempt, elapsed
+                            );
                             return;
                         }
                     }
                     Err(e) => {
                         // Error during check
                         let error_response = CheckDnsPropagationResponse {
-                            response: Some(check_dns_propagation_response::Response::Error(common::Error {
-                                code: common::error::ErrorCode::DnsChallengeFailed as i32,
-                                message: format!("DNS propagation check failed: {}", e),
-                                details: std::collections::HashMap::new(),
-                            })),
+                            response: Some(check_dns_propagation_response::Response::Error(
+                                common::Error {
+                                    code: common::error::ErrorCode::DnsChallengeFailed as i32,
+                                    message: format!("DNS propagation check failed: {}", e),
+                                    details: std::collections::HashMap::new(),
+                                },
+                            )),
                         };
-                        
+
                         let _ = tx.send(Ok(error_response)).await;
                         error!("DNS propagation check error for {}: {}", domain, e);
                         return;
@@ -285,15 +326,15 @@ impl RelayService for RelayServiceImpl {
                                 attempt: attempt as i32,
                                 max_attempts: max_attempts as i32,
                                 next_check_seconds: 10,
-                            }
+                            },
                         )),
                     };
-                    
+
                     if tx.send(Ok(wait_response)).await.is_err() {
                         return; // Stream closed
                     }
-                    
-                    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+
+                    tokio::time::sleep(Duration::from_secs(10)).await;
                 }
             }
         });
@@ -331,21 +372,21 @@ mod tests {
         assert!(is_valid_challenge_domain("test-node.private.hellas.ai"));
         assert!(is_valid_challenge_domain("node_123.private.hellas.ai"));
         assert!(is_valid_challenge_domain("a.private.hellas.ai"));
-        
+
         // Invalid domains - wrong suffix
         assert!(!is_valid_challenge_domain("user1.private.hellas.com"));
         assert!(!is_valid_challenge_domain("user1.public.hellas.ai"));
         assert!(!is_valid_challenge_domain("user1.hellas.ai"));
         assert!(!is_valid_challenge_domain("example.com"));
-        
+
         // Invalid domains - empty ID
         assert!(!is_valid_challenge_domain(".private.hellas.ai"));
         assert!(!is_valid_challenge_domain("private.hellas.ai"));
-        
+
         // Invalid domains - multiple subdomains
         assert!(!is_valid_challenge_domain("sub.user1.private.hellas.ai"));
         assert!(!is_valid_challenge_domain("a.b.c.private.hellas.ai"));
-        
+
         // Invalid domains - invalid characters
         assert!(!is_valid_challenge_domain("user@1.private.hellas.ai"));
         assert!(!is_valid_challenge_domain("user1$.private.hellas.ai"));

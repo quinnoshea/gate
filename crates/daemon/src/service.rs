@@ -2,8 +2,8 @@
 
 use crate::upstream::UpstreamClient;
 use hellas_gate_proto::pb::gate::{
-    inference::v1::{inference_service_server::InferenceService, *},
     common::v1::{self as common, error::ErrorCode},
+    inference::v1::{inference_service_server::InferenceService, *},
 };
 use std::sync::Arc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
@@ -21,6 +21,32 @@ impl DaemonServiceImpl {
     pub fn new(upstream_client: Arc<UpstreamClient>) -> Self {
         info!("Creating DaemonService instance");
         Self { upstream_client }
+    }
+
+    /// Build error response with consistent format
+    fn build_error_response(
+        request_id: String,
+        code: ErrorCode,
+        message: String,
+    ) -> InferenceResponse {
+        InferenceResponse {
+            request_id,
+            response: Some(inference_response::Response::Error(common::Error {
+                code: code as i32,
+                message,
+                details: std::collections::HashMap::new(),
+            })),
+        }
+    }
+
+    /// Build error response for invalid arguments
+    fn build_invalid_argument_error(request_id: String, message: String) -> InferenceResponse {
+        Self::build_error_response(request_id, ErrorCode::InvalidArgument, message)
+    }
+
+    /// Build error response for internal errors
+    fn build_internal_error(request_id: String, message: String) -> InferenceResponse {
+        Self::build_error_response(request_id, ErrorCode::InternalError, message)
     }
 }
 
@@ -41,20 +67,19 @@ impl InferenceService for DaemonServiceImpl {
             while let Some(request_result) = stream.next().await {
                 match request_result {
                     Ok(req) => {
-                        info!("Received streaming inference request for model: {}", req.model_id);
-                        
+                        info!(
+                            "Received streaming inference request for model: {}",
+                            req.model_id
+                        );
+
                         // Convert protobuf request to upstream format
                         let upstream_request = match convert_inference_request(&req) {
                             Ok(request) => request,
                             Err(e) => {
-                                let error_response = InferenceResponse {
-                                    request_id: req.request_id.clone(),
-                                    response: Some(inference_response::Response::Error(common::Error {
-                                        code: ErrorCode::InvalidArgument as i32,
-                                        message: format!("Invalid request: {}", e),
-                                        details: std::collections::HashMap::new(),
-                                    })),
-                                };
+                                let error_response = Self::build_invalid_argument_error(
+                                    req.request_id.clone(),
+                                    format!("Invalid request: {}", e),
+                                );
                                 let _ = tx.send(Ok(error_response)).await;
                                 continue;
                             }
@@ -67,17 +92,9 @@ impl InferenceService for DaemonServiceImpl {
                                     request_id: req.request_id.clone(),
                                     response: Some(inference_response::Response::Complete(
                                         inference_response::InferenceComplete {
-                                            result: Some(common::JsonValue {
-                                                json: upstream_response.response.to_string(),
-                                            }),
-                                            metrics: Some(inference_response::InferenceMetrics {
-                                                tokens_processed: 10, // TODO: Extract from upstream response
-                                                tokens_generated: 5,
-                                                latency_ms: 100,
-                                                tokens_per_second: 50.0,
-                                                custom_metrics: std::collections::HashMap::new(),
-                                            }),
-                                        }
+                                            result: Some(upstream_response.response.into()),
+                                            metrics: None, // TODO: Extract metrics from upstream response
+                                        },
                                     )),
                                 };
 
@@ -87,28 +104,20 @@ impl InferenceService for DaemonServiceImpl {
                             }
                             Err(e) => {
                                 error!("Upstream inference failed: {}", e);
-                                let error_response = InferenceResponse {
-                                    request_id: req.request_id.clone(),
-                                    response: Some(inference_response::Response::Error(common::Error {
-                                        code: ErrorCode::InternalError as i32,
-                                        message: format!("Inference failed: {}", e),
-                                        details: std::collections::HashMap::new(),
-                                    })),
-                                };
+                                let error_response = Self::build_internal_error(
+                                    req.request_id.clone(),
+                                    format!("Inference failed: {}", e),
+                                );
                                 let _ = tx.send(Ok(error_response)).await;
                             }
                         }
                     }
                     Err(e) => {
                         error!("Error in streaming inference: {}", e);
-                        let error_response = InferenceResponse {
-                            request_id: "unknown".to_string(),
-                            response: Some(inference_response::Response::Error(common::Error {
-                                code: ErrorCode::InternalError as i32,
-                                message: format!("Streaming error: {}", e),
-                                details: std::collections::HashMap::new(),
-                            })),
-                        };
+                        let error_response = Self::build_internal_error(
+                            "unknown".to_string(),
+                            format!("Streaming error: {}", e),
+                        );
                         let _ = tx.send(Ok(error_response)).await;
                         break;
                     }
@@ -124,7 +133,10 @@ impl InferenceService for DaemonServiceImpl {
         request: Request<InferenceRequest>,
     ) -> Result<Response<InferenceResponse>, Status> {
         let req = request.into_inner();
-        info!("Received unary inference request for model: {}", req.model_id);
+        info!(
+            "Received unary inference request for model: {}",
+            req.model_id
+        );
 
         // Convert protobuf request to upstream format
         let upstream_request = convert_inference_request(&req)
@@ -137,17 +149,9 @@ impl InferenceService for DaemonServiceImpl {
                     request_id: req.request_id.clone(),
                     response: Some(inference_response::Response::Complete(
                         inference_response::InferenceComplete {
-                            result: Some(common::JsonValue {
-                                json: upstream_response.response.to_string(),
-                            }),
-                            metrics: Some(inference_response::InferenceMetrics {
-                                tokens_processed: 10, // TODO: Extract from upstream response
-                                tokens_generated: 5,
-                                latency_ms: 100,
-                                tokens_per_second: 50.0,
-                                custom_metrics: std::collections::HashMap::new(),
-                            }),
-                        }
+                            result: Some(upstream_response.response.into()),
+                            metrics: None, // TODO: Extract metrics from upstream response
+                        },
                     )),
                 };
 
@@ -155,14 +159,10 @@ impl InferenceService for DaemonServiceImpl {
             }
             Err(e) => {
                 error!("Upstream inference failed: {}", e);
-                let response = InferenceResponse {
-                    request_id: req.request_id.clone(),
-                    response: Some(inference_response::Response::Error(common::Error {
-                        code: ErrorCode::InternalError as i32,
-                        message: format!("Inference failed: {}", e),
-                        details: std::collections::HashMap::new(),
-                    })),
-                };
+                let response = Self::build_internal_error(
+                    req.request_id.clone(),
+                    format!("Inference failed: {}", e),
+                );
                 Ok(Response::new(response))
             }
         }
@@ -176,30 +176,16 @@ impl InferenceService for DaemonServiceImpl {
 
         match self.upstream_client.list_models().await {
             Ok(_models_response) => {
-                // TODO: Parse upstream response and convert to protobuf format
-                // For now, return mock models
-                let response = ListModelsResponse {
-                    models: vec![
-                        list_models_response::ModelInfo {
-                            id: "gpt-4".to_string(),
-                            name: "GPT-4".to_string(),
-                            description: "OpenAI's GPT-4 model".to_string(),
-                            capabilities: vec!["text-generation".to_string(), "chat".to_string()],
-                            status: 0, // Available
-                            specs: Some(list_models_response::model_info::ModelSpecs {
-                                parameters: 175_000_000_000, // 175B parameters
-                                memory_required: 350_000_000_000, // ~350GB
-                                formats: vec!["chat".to_string(), "completion".to_string()],
-                            }),
-                        },
-                    ],
-                };
-
+                // TODO: Parse upstream response properly and convert to protobuf format
+                let response = ListModelsResponse { models: vec![] };
                 Ok(Response::new(response))
             }
             Err(e) => {
                 error!("Failed to get models from upstream: {}", e);
-                Err(Status::internal(format!("Failed to retrieve models: {}", e)))
+                Err(Status::internal(format!(
+                    "Failed to retrieve models: {}",
+                    e
+                )))
             }
         }
     }
@@ -212,7 +198,7 @@ impl InferenceService for DaemonServiceImpl {
     ) -> Result<Response<Self::LoadModelStream>, Status> {
         let req = request.into_inner();
         let (tx, rx) = tokio::sync::mpsc::channel(16);
-        
+
         info!("Loading model: {}", req.model_id);
 
         // TODO: Implement actual model loading
@@ -228,10 +214,10 @@ impl InferenceService for DaemonServiceImpl {
                         message: format!("Downloading model {}", req.model_id),
                         bytes_loaded: 1024000,
                         total_bytes: 2048000,
-                    }
+                    },
                 )),
             };
-            
+
             if tx.send(Ok(progress_response)).await.is_err() {
                 return;
             }
@@ -250,10 +236,10 @@ impl InferenceService for DaemonServiceImpl {
                             status: 1, // Loaded
                             specs: None,
                         }),
-                    }
+                    },
                 )),
             };
-            
+
             let _ = tx.send(Ok(complete_response)).await;
         });
 
@@ -295,7 +281,7 @@ impl InferenceService for DaemonServiceImpl {
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap()
                         .as_secs() as i64,
-                }
+                },
             )),
         };
 
@@ -304,15 +290,16 @@ impl InferenceService for DaemonServiceImpl {
 }
 
 /// Convert protobuf InferenceRequest to upstream format
-fn convert_inference_request(req: &InferenceRequest) -> Result<crate::upstream::InferenceRequest, String> {
-    // Extract input data
-    let input_json = req.input_data
-        .as_ref()
-        .ok_or("Missing input data")?
-        .json
-        .clone();
-    
-    let input_value: serde_json::Value = serde_json::from_str(&input_json)
+fn convert_inference_request(
+    req: &InferenceRequest,
+) -> Result<crate::upstream::InferenceRequest, String> {
+    // Extract and convert input data using proto converter
+    let input_json = req.input_data.as_ref().ok_or("Missing input data")?;
+
+    // Use existing converter instead of manual parsing
+    let input_value: serde_json::Value = input_json
+        .clone()
+        .try_into()
         .map_err(|e| format!("Invalid JSON in input_data: {}", e))?;
 
     crate::upstream::InferenceRequest::new(input_value)

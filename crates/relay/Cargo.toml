@@ -18,7 +18,6 @@ tracing.workspace = true
 serde.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
-rand.workspace = true
 hex.workspace = true
 
 # RPC framework dependencies  
@@ -29,16 +28,12 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 # Relay-specific dependencies
 # TLS and networking
 rustls = { workspace = true }
-tokio-rustls = { workspace = true }
-webpki-roots = { workspace = true }
 
 # HTTP and DNS
 reqwest = { workspace = true }
 trust-dns-resolver = "0.23"
 
 # Parsing and serialization
-bytes = { workspace = true }
-url = { workspace = true }
 
 # Local crates
 hellas-gate-core = { workspace = true }
@@ -46,10 +41,6 @@ hellas-gate-proto = { workspace = true }
 
 # P2P networking via tonic-iroh
 tonic-iroh-transport = { workspace = true }
-n0-watcher = "*"
-
-# RPC dependencies
-dashmap.workspace = true
 
 # Library only - no binary target
 

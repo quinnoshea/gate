@@ -110,4 +110,3 @@ impl std::str::FromStr for GateAddr {
         })
     }
 }
-

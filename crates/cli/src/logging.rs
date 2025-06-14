@@ -1,8 +1,8 @@
 use anyhow::Result;
+use std::fs::OpenOptions;
 use std::path::PathBuf;
 use tracing::Level;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
-use std::fs::OpenOptions;
 
 /// Initialize logging for the CLI
 pub fn init_logging(log_level: Level, data_dir: Option<PathBuf>, component: &str) -> Result<()> {
@@ -19,7 +19,7 @@ pub fn init_logging(log_level: Level, data_dir: Option<PathBuf>, component: &str
 
 fn init_file_logging(level: Level, data_dir: Option<PathBuf>, component: &str) -> Result<()> {
     let log_file_path = get_log_file_path(data_dir, component)?;
-    
+
     // Ensure parent directory exists
     if let Some(parent) = log_file_path.parent() {
         std::fs::create_dir_all(parent)?;

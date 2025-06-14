@@ -11,8 +11,6 @@ categories.workspace = true
 [dependencies]
 # Protobuf support
 prost.workspace = true
-prost-types.workspace = true
-bytes.workspace = true
 thiserror.workspace = true
 
 # JSON serialization for conversions
@@ -21,7 +19,6 @@ serde_json.workspace = true
 
 # Tonic for service trait generation (just traits, not transport)
 tonic = "0.13"
-tokio-stream = "0.1"
 
 # Core types for conversions
 hellas-gate-core = { workspace = true }

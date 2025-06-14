@@ -10,55 +10,33 @@ categories.workspace = true
 description = "Gate daemon for P2P AI inference network"
 
 [dependencies]
-# Workspace dependencies
 hellas-gate-core = { workspace = true }
 hellas-gate-proto = { workspace = true }
 hellas-gate-relay = { workspace = true }
-
-# P2P networking via tonic-iroh
 tonic-iroh-transport = { workspace = true }
-
 iroh = { workspace = true }
-
 tokio = { workspace = true }
 tokio-util = { workspace = true }
-futures = { workspace = true }
 tracing = { workspace = true }
 serde = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
-
-# RPC framework dependencies
 tonic = { workspace = true }
 tokio-stream = { version = "0.1", default-features = false, features = ["sync"] }
-
-# HTTP server
 axum = "0.7"
 tower = "0.4"
 tower-http = { version = "0.5", features = ["cors", "trace", "timeout"] }
 hyper = "1.0"
 hyper-util = { version = "0.1", features = ["tokio"] }
-
-# Configuration
 config = { workspace = true }
 serde_json = { workspace = true }
-
-# HTTP client for upstream providers
 reqwest = { workspace = true, features = ["stream"] }
-
-# TLS certificate generation and handling
 rustls = { workspace = true }
 rcgen = { workspace = true }
 tokio-rustls = { workspace = true }
-
-# ACME/LetsEncrypt support
 instant-acme = { git = "https://github.com/djc/instant-acme.git" }
-
-# Time handling
-chrono = { version = "0.4", features = ["serde"] }
+futures.workspace = true
 time = "0.3"
-
-# Cryptography
 sha2 = "0.10"
 hex = { workspace = true }
 base64 = "0.22"
@@ -67,6 +45,3 @@ n0-watcher = "*"
 [dev-dependencies]
 tempfile = "3.8"
 rand = "0.8"
-
-[features]
-default = []

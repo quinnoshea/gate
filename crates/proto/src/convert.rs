@@ -57,16 +57,12 @@ impl TryFrom<proto::SocketAddr> for SocketAddr {
 
     fn try_from(proto: proto::SocketAddr) -> Result<Self, Self::Error> {
         match proto.addr {
-            Some(proto::socket_addr::Addr::Ipv4(addr_str)) => {
-                addr_str.parse().map_err(|_| {
-                    ConversionError::InvalidSocketAddr(format!("Invalid IPv4 address: {}", addr_str))
-                })
-            }
-            Some(proto::socket_addr::Addr::Ipv6(addr_str)) => {
-                addr_str.parse().map_err(|_| {
-                    ConversionError::InvalidSocketAddr(format!("Invalid IPv6 address: {}", addr_str))
-                })
-            }
+            Some(proto::socket_addr::Addr::Ipv4(addr_str)) => addr_str.parse().map_err(|_| {
+                ConversionError::InvalidSocketAddr(format!("Invalid IPv4 address: {}", addr_str))
+            }),
+            Some(proto::socket_addr::Addr::Ipv6(addr_str)) => addr_str.parse().map_err(|_| {
+                ConversionError::InvalidSocketAddr(format!("Invalid IPv6 address: {}", addr_str))
+            }),
             None => Err(ConversionError::MissingField("socket_addr.addr")),
         }
     }

@@ -6,7 +6,7 @@ pub trait ErrorContext<T> {
     fn with_context<F>(self, f: F) -> Result<T, String>
     where
         F: FnOnce() -> String;
-    
+
     /// Add operation context with a static string
     fn with_context_str(self, context: &'static str) -> Result<T, String>;
 }
@@ -24,7 +24,7 @@ where
             Err(err) => Err(format!("{}: {}", f(), err)),
         }
     }
-    
+
     fn with_context_str(self, context: &'static str) -> Result<T, String> {
         self.with_context(|| context.to_string())
     }
@@ -38,13 +38,13 @@ pub type CoreResult<T> = std::result::Result<T, CoreError>;
 pub enum CoreError {
     #[error("Invalid configuration: {message}")]
     InvalidConfig { message: String },
-    
+
     #[error("IO operation failed: {message}")]
     Io { message: String },
-    
+
     #[error("Serialization error: {message}")]
     Serialization { message: String },
-    
+
     #[error("Internal error: {message}")]
     Internal { message: String },
 }
@@ -56,21 +56,21 @@ impl CoreError {
             message: message.into(),
         }
     }
-    
+
     /// Create an IO error
     pub fn io_error(message: impl Into<String>) -> Self {
         Self::Io {
             message: message.into(),
         }
     }
-    
+
     /// Create a serialization error
     pub fn serialization_error(message: impl Into<String>) -> Self {
         Self::Serialization {
             message: message.into(),
         }
     }
-    
+
     /// Create an internal error
     pub fn internal_error(message: impl Into<String>) -> Self {
         Self::Internal {

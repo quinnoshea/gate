@@ -7,6 +7,7 @@ mod logging;
 use anyhow::Result;
 use clap::{Parser, ValueEnum};
 use commands::Commands;
+use std::time::Duration;
 use tracing::{error, info, Level};
 
 #[derive(Parser)]
@@ -33,7 +34,8 @@ struct Cli {
 #[tokio::main]
 async fn main() -> Result<()> {
     // Install default crypto provider for rustls
-    rustls::crypto::ring::default_provider().install_default()
+    rustls::crypto::ring::default_provider()
+        .install_default()
         .map_err(|_| anyhow::anyhow!("Failed to install rustls crypto provider"))?;
 
     let cli = Cli::parse();
@@ -62,7 +64,7 @@ async fn main() -> Result<()> {
         }
     } else {
         // Execute command with timeout
-        let timeout_duration = std::time::Duration::from_secs(cli.timeout);
+        let timeout_duration = Duration::from_secs(cli.timeout);
         match tokio::time::timeout(timeout_duration, cli.command.execute(cli.data_dir)).await {
             Ok(Ok(())) => {
                 info!("Command completed successfully");

@@ -1,7 +1,7 @@
 //! Upstream inference provider client
 
 use crate::config::UpstreamConfig;
-use crate::{DaemonError, Result};
+use crate::{DaemonError, ErrorContext, Result};
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -49,7 +49,8 @@ impl UpstreamClient {
         let client = Client::builder()
             .timeout(Duration::from_secs(config.timeout_secs))
             .build()
-            .map_err(|e| DaemonError::Upstream(format!("Failed to create HTTP client: {e}")))?;
+            .with_context_str("Failed to create HTTP client")
+            .map_err(|e| DaemonError::Upstream(e))?;
 
         Ok(Self {
             client,
@@ -98,7 +99,8 @@ impl UpstreamClient {
         let response_json: JsonValue = response
             .json()
             .await
-            .map_err(|e| DaemonError::Upstream(format!("Failed to parse models response: {e}")))?;
+            .with_context_str("Failed to parse models response")
+            .map_err(|e| DaemonError::Upstream(e))?;
 
         debug!("Available models: {}", response_json);
 
