@@ -260,8 +260,6 @@ async fn start_relay(bind: SocketAddr, p2p_bind: SocketAddr, data_dir: PathBuf) 
         .secret_key(secret_key)
         .bind_addr_v4(bind_addr.parse()?)
         .relay_mode(iroh::RelayMode::Disabled)
-        .discovery_n0()
-        .discovery_local_network()
         .bind()
         .await?;
 

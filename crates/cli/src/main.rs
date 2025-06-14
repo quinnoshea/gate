@@ -27,6 +27,10 @@ struct Cli {
     #[arg(short = 't', long, global = true, default_value = "5")]
     timeout: u64,
 
+    /// Disable file logging (only log to stderr)
+    #[arg(long, global = true)]
+    no_file_log: bool,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -46,7 +50,7 @@ async fn main() -> Result<()> {
         Commands::Relay { .. } => "relay",
         _ => "cli",
     };
-    logging::init_logging(cli.log_level.into(), cli.data_dir.clone(), component)?;
+    logging::init_logging(cli.log_level.into(), cli.data_dir.clone(), component, cli.no_file_log)?;
 
     info!("Starting Gate CLI");
 

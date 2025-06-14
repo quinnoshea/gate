@@ -19,7 +19,7 @@ pub fn load_or_generate_identity(component_dir: &Path) -> Result<Vec<u8>, std::i
 
         // Create directory and save the key
         std::fs::create_dir_all(component_dir)?;
-        std::fs::write(&identity_file, &key_bytes)?;
+        std::fs::write(&identity_file, key_bytes)?;
         info!("Generated and saved new identity to: {:?}", identity_file);
 
         Ok(key_bytes.to_vec())

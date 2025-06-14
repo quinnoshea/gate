@@ -75,7 +75,7 @@ dev: fmt clippy test ## Run development checks (format, clippy, test)
 
 ci: fmt-check clippy test audit ## Run CI checks (format check, clippy, test, audit)
 
-all: clean build test clippy ## Clean, build, test, and lint everything
+all: build test clippy ## DOESNT Clean but build, test, and lint everything
 
 # Release preparation
 pre-release: ci doc ## Prepare for release (run CI + generate docs)
