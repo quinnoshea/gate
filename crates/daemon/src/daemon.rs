@@ -261,8 +261,6 @@ impl GateDaemon {
         // Connect to bootstrap peers
         Self::connect_to_bootstrap_peers(config, endpoint, discovered_relays.clone()).await?;
 
-        // TLS bridge will be created as needed for each connection
-
         info!("All background services started successfully");
         Ok(())
     }
@@ -597,16 +595,22 @@ impl GateDaemon {
             return Ok(());
         }
 
-        info!("Connecting to {} bootstrap peers", config.p2p.bootstrap_peers.len());
+        info!(
+            "Connecting to {} bootstrap peers",
+            config.p2p.bootstrap_peers.len()
+        );
 
         for peer_addr_str in &config.p2p.bootstrap_peers {
             info!("Attempting to connect to bootstrap peer: {}", peer_addr_str);
-            
+
             // Parse the peer address (format: "peer_id@ip:port")
             let gate_addr = match peer_addr_str.parse::<hellas_gate_core::GateAddr>() {
                 Ok(addr) => addr,
                 Err(e) => {
-                    warn!("Failed to parse bootstrap peer address '{}': {}", peer_addr_str, e);
+                    warn!(
+                        "Failed to parse bootstrap peer address '{}': {}",
+                        peer_addr_str, e
+                    );
                     continue;
                 }
             };
@@ -615,7 +619,10 @@ impl GateDaemon {
             let node_id = match iroh::NodeId::from_bytes(gate_addr.id.as_bytes()) {
                 Ok(id) => id,
                 Err(e) => {
-                    warn!("Failed to convert GateId to NodeId for '{}': {}", peer_addr_str, e);
+                    warn!(
+                        "Failed to convert GateId to NodeId for '{}': {}",
+                        peer_addr_str, e
+                    );
                     continue;
                 }
             };
@@ -632,19 +639,25 @@ impl GateDaemon {
             // For bootstrap connections, we'll try a simple connection first
             match endpoint.connect(node_addr.clone(), &relay_alpn).await {
                 Ok(connection) => {
-                    info!("Successfully connected to bootstrap peer: {}", peer_addr_str);
-                    
+                    info!(
+                        "Successfully connected to bootstrap peer: {}",
+                        peer_addr_str
+                    );
+
                     // Add to discovered relays
                     {
                         let mut relays = discovered_relays.write().await;
                         relays.insert(node_id);
                     }
-                    
+
                     // Close the connection as we just wanted to test it
                     drop(connection);
                 }
                 Err(e) => {
-                    warn!("Failed to connect to bootstrap peer '{}': {}", peer_addr_str, e);
+                    warn!(
+                        "Failed to connect to bootstrap peer '{}': {}",
+                        peer_addr_str, e
+                    );
                 }
             }
         }
@@ -744,8 +757,7 @@ impl GateDaemon {
                 // This peer doesn't support the relay service or connection failed
                 trace!(
                     "Peer {} does not support relay service or connection failed: {}",
-                    peer_id,
-                    e
+                    peer_id, e
                 );
                 Err(DaemonError::ConfigString(format!(
                     "Not a relay peer: {}",
@@ -858,7 +870,9 @@ mod tests {
                         // This might fail if address discovery is slow, which is OK
                     }
                     Err(_) => {
-                        println!("WARNING: Node address discovery timed out - this is expected in some environments");
+                        println!(
+                            "WARNING: Node address discovery timed out - this is expected in some environments"
+                        );
                     }
                 }
 

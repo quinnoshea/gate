@@ -10,6 +10,8 @@ use commands::Commands;
 use std::time::Duration;
 use tracing::{error, info, Level};
 
+use crate::logging::shutdown_opentelemetry;
+
 #[derive(Parser)]
 #[command(name = "gate")]
 #[command(about = "A P2P AI inference network")]
@@ -55,15 +57,16 @@ async fn main() -> Result<()> {
     info!("Starting Gate CLI");
 
     // Execute command with optional timeout
-    if cli.timeout == 0 {
+    let result = if cli.timeout == 0 {
         // No timeout - run indefinitely
         match cli.command.execute(cli.data_dir).await {
             Ok(()) => {
                 info!("Command completed successfully");
+                Ok(())
             }
             Err(e) => {
                 error!("Command failed: {e}");
-                std::process::exit(1);
+                Err(e)
             }
         }
     } else {
@@ -72,19 +75,28 @@ async fn main() -> Result<()> {
         match tokio::time::timeout(timeout_duration, cli.command.execute(cli.data_dir)).await {
             Ok(Ok(())) => {
                 info!("Command completed successfully");
+                Ok(())
             }
             Ok(Err(e)) => {
                 error!("Command failed: {e}");
-                std::process::exit(1);
+                Err(e)
             }
             Err(_) => {
-                error!("Command timed out after {} seconds", cli.timeout);
-                std::process::exit(1);
+                let err = anyhow::anyhow!("Command timed out after {} seconds", cli.timeout);
+                error!("{}", err);
+                Err(err)
             }
         }
-    }
+    };
 
-    Ok(())
+    // Shutdown OpenTelemetry to flush any remaining traces
+    shutdown_opentelemetry();
+
+    // Exit with appropriate code
+    match result {
+        Ok(()) => Ok(()),
+        Err(_) => std::process::exit(1),
+    }
 }
 
 #[derive(Clone, Debug, ValueEnum)]

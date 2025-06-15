@@ -28,8 +28,6 @@ pub use tls::TlsHandler;
 pub use hellas_gate_core::{CoreError, ErrorContext};
 
 // Daemon-specific error handling
-// Note: DaemonErrorContext trait is defined below and auto-imported
-
 /// Result type for daemon operations
 pub type Result<T> = std::result::Result<T, DaemonError>;
 

@@ -21,6 +21,10 @@ hellas-gate-relay = { workspace = true }
 
 tokio = { workspace = true }
 tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true }
+opentelemetry-otlp = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 iroh = { workspace = true }

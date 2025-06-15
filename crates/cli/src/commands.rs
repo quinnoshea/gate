@@ -173,9 +173,7 @@ impl CertCommands {
 async fn start_daemon(config_file: Option<PathBuf>, data_dir: PathBuf) -> Result<()> {
     info!("Starting Gate daemon");
 
-    // Set component-specific state directory via environment variable
     let daemon_dir = data_dir.join("daemon");
-    std::env::set_var("GATE_STATE_DIR", &daemon_dir);
 
     // Load or generate daemon identity
     let identity = load_or_generate_identity(&daemon_dir)?;
@@ -217,9 +215,7 @@ async fn start_daemon(config_file: Option<PathBuf>, data_dir: PathBuf) -> Result
 async fn start_relay(bind: SocketAddr, p2p_bind: SocketAddr, data_dir: PathBuf) -> Result<()> {
     info!("Starting Gate relay server");
 
-    // Set component-specific state directory via environment variable
     let relay_dir = data_dir.join("relay");
-    std::env::set_var("GATE_STATE_DIR", &relay_dir);
 
     // Load or generate relay identity
     let identity = load_or_generate_identity(&relay_dir)?;

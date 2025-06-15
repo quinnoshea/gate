@@ -29,8 +29,6 @@
             lockFile = ./Cargo.lock;
             outputHashes = {
               "instant-acme-0.8.0" = "sha256-UF/nJ8Nxvxk2F6U689Pkv18kpfNnwBDsOnmaX9wFBCU=";
-              # "iroh-0.35.0" = "sha256-/XMexqG19KLIe13jph6054Niga2oEoR4OEDZbQSoqws=";
-              # "tonic-iroh-transport-0.0.0" = "sha256-zjbNGrICol/rKuFO1+UBFHSu9YxZbARsW6BZZBVonOc=";
             };
           };
 
@@ -107,6 +105,7 @@
           ];
 
           RUST_LOG = "info";
+          OTLP_ENDPOINT = "https://jaeger.internal.lsd-ag.ch/v1/traces";
 
           shellHook = ''
             # Find git repository root and set GATE_STATE_DIR

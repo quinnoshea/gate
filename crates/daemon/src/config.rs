@@ -119,7 +119,9 @@ impl Default for P2PConfig {
     fn default() -> Self {
         Self {
             identity_file: None,
-            bootstrap_peers: vec![],
+            bootstrap_peers: vec![
+                "c8c859cdbf5564612321768d5537227aae184799ef3d325e193d29983521dcfc@213.239.212.173:31145".to_string(),
+            ],
             discovery_enabled: true,
             port: 31145, // Default P2P port
         }
