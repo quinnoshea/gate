@@ -131,8 +131,8 @@ impl HttpsProxy {
     async fn handle_connection(&self, mut stream: TcpStream) -> Result<()> {
         info!("New HTTPS connection received, reading ClientHello for SNI extraction");
 
-        // Read enough data to extract SNI (first ~512 bytes should be sufficient)
-        let mut buffer = vec![0u8; 512];
+        // Read enough data to extract SNI (modern ClientHellos can be 1KB+ with extensions)
+        let mut buffer = vec![0u8; 2048];
         let n = stream
             .read(&mut buffer)
             .await

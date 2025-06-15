@@ -2,18 +2,23 @@ use anyhow::Result;
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 use tracing::Level;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 use opentelemetry::{global, trace::TracerProvider};
-use opentelemetry::KeyValue;
-use opentelemetry_sdk::{runtime, trace as sdk_trace, Resource};
+use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_sdk::{Resource, trace as sdk_trace};
 use tracing_opentelemetry::OpenTelemetryLayer;
 
 /// Initialize logging for the CLI
-pub fn init_logging(log_level: Level, data_dir: Option<PathBuf>, component: &str, no_file_log: bool) -> Result<()> {
+pub fn init_logging(
+    log_level: Level,
+    data_dir: Option<PathBuf>,
+    component: &str,
+    no_file_log: bool,
+) -> Result<()> {
     // Initialize OpenTelemetry if OTEL_ENDPOINT is set
     let otel_layer = init_opentelemetry(component)?;
-    
+
     if no_file_log {
         // Only log to stderr
         init_stderr_logging(log_level, otel_layer)
@@ -31,22 +36,22 @@ pub fn init_logging(log_level: Level, data_dir: Option<PathBuf>, component: &str
 }
 
 /// Initialize OpenTelemetry if OTEL_ENDPOINT environment variable is set
-fn init_opentelemetry(component: &str) -> Result<Option<OpenTelemetryLayer<tracing_subscriber::Registry, sdk_trace::Tracer>>> {
-    if let Ok(endpoint) = std::env::var("OTEL_ENDPOINT") {
+fn init_opentelemetry(
+    component: &str,
+) -> Result<Option<OpenTelemetryLayer<tracing_subscriber::Registry, sdk_trace::SdkTracer>>> {
+    if let Ok(endpoint) = std::env::var("OTLP_ENDPOINT") {
         let service_name = format!("gate-{}", component);
-        
+
         let exporter = opentelemetry_otlp::SpanExporter::builder()
             .with_http()
             .with_endpoint(endpoint)
             .build()?;
-            
-        let provider = sdk_trace::TracerProvider::builder()
-            .with_batch_exporter(exporter, runtime::Tokio)
-            .with_resource(Resource::new(vec![
-                KeyValue::new("service.name", service_name),
-            ]))
+
+        let provider = sdk_trace::SdkTracerProvider::builder()
+            .with_batch_exporter(exporter)
+            .with_resource(Resource::builder().with_service_name(service_name).build())
             .build();
-            
+
         global::set_tracer_provider(provider.clone());
         let tracer = provider.tracer("gate");
 
@@ -58,73 +63,73 @@ fn init_opentelemetry(component: &str) -> Result<Option<OpenTelemetryLayer<traci
 
 /// Shutdown OpenTelemetry gracefully
 pub fn shutdown_opentelemetry() {
-    global::shutdown_tracer_provider();
+    // In 0.30, shutdown is handled automatically when provider is dropped
+    // global::shutdown_tracer_provider() doesn't exist in 0.30
 }
 
-fn init_file_logging(level: Level, data_dir: Option<PathBuf>, component: &str, otel_layer: Option<OpenTelemetryLayer<tracing_subscriber::Registry, sdk_trace::Tracer>>) -> Result<()> {
-    let log_file_path = get_log_file_path(data_dir, component)?;
-
-    // Ensure parent directory exists
-    if let Some(parent) = log_file_path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-
-    // Create/truncate the log file
-    let log_file = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open(&log_file_path)?;
-
+fn init_file_logging(
+    level: Level,
+    data_dir: Option<PathBuf>,
+    component: &str,
+    otel_layer: Option<OpenTelemetryLayer<tracing_subscriber::Registry, sdk_trace::SdkTracer>>,
+) -> Result<()> {
     let level_str = level.as_str().to_lowercase();
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         format!("gate={level_str},hellas_gate_daemon={level_str},hellas_gate_p2p={level_str},hellas_gate_relay={level_str}").into()
     });
 
-    let file_layer = tracing_subscriber::fmt::layer()
-        .with_writer(log_file)
-        .with_ansi(false); // No color codes in files
-        
-    let console_layer = tracing_subscriber::fmt::layer()
-        .with_ansi(true); // Keep colors for console
-
     if let Some(otel) = otel_layer {
+        // Simple OpenTelemetry + console logging
         tracing_subscriber::registry()
             .with(otel)
             .with(env_filter)
-            .with(file_layer)
-            .with(console_layer)
+            .with(tracing_subscriber::fmt::layer())
             .init();
     } else {
+        // File + console logging without OpenTelemetry
+        let log_file_path = get_log_file_path(data_dir, component)?;
+        if let Some(parent) = log_file_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let log_file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&log_file_path)?;
+
         tracing_subscriber::registry()
             .with(env_filter)
-            .with(file_layer)
-            .with(console_layer)
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_writer(log_file)
+                    .with_ansi(false),
+            )
+            .with(tracing_subscriber::fmt::layer().with_ansi(true))
             .init();
     }
 
     Ok(())
 }
 
-fn init_stderr_logging(level: Level, otel_layer: Option<OpenTelemetryLayer<tracing_subscriber::Registry, sdk_trace::Tracer>>) -> Result<()> {
+fn init_stderr_logging(
+    level: Level,
+    otel_layer: Option<OpenTelemetryLayer<tracing_subscriber::Registry, sdk_trace::SdkTracer>>,
+) -> Result<()> {
     let level_str = level.as_str().to_lowercase();
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         format!("gate={level_str},hellas_gate_daemon={level_str},hellas_gate_p2p={level_str},hellas_gate_relay={level_str}").into()
     });
 
-    let console_layer = tracing_subscriber::fmt::layer()
-        .with_ansi(true); // Keep colors for console
-
     if let Some(otel) = otel_layer {
         tracing_subscriber::registry()
             .with(otel)
             .with(env_filter)
-            .with(console_layer)
+            .with(tracing_subscriber::fmt::layer())
             .init();
     } else {
         tracing_subscriber::registry()
             .with(env_filter)
-            .with(console_layer)
+            .with(tracing_subscriber::fmt::layer())
             .init();
     }
 
