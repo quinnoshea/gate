@@ -399,11 +399,151 @@ fn parse_sni_extension(data: &[u8]) -> Result<Option<String>> {
 mod tests {
     use super::*;
 
+    /// Create a minimal TLS ClientHello with SNI for testing
+    fn create_client_hello_with_sni(hostname: &str) -> Vec<u8> {
+        let mut buffer = Vec::new();
+        
+        // TLS Record Header
+        buffer.push(22); // Content Type: Handshake
+        buffer.extend_from_slice(&[3, 3]); // Version: TLS 1.2
+        
+        // Record length placeholder (will fill in later)
+        let record_len_pos = buffer.len();
+        buffer.extend_from_slice(&[0, 0]);
+        
+        // Handshake Header
+        buffer.push(1); // Handshake Type: ClientHello
+        
+        // Handshake length placeholder (will fill in later)
+        let handshake_len_pos = buffer.len();
+        buffer.extend_from_slice(&[0, 0, 0]);
+        
+        // Version
+        buffer.extend_from_slice(&[3, 3]); // TLS 1.2
+        
+        // Random (32 bytes)
+        buffer.extend_from_slice(&[0u8; 32]);
+        
+        // Session ID length
+        buffer.push(0);
+        
+        // Cipher suites length (2 bytes)
+        buffer.extend_from_slice(&[0, 2]);
+        // One cipher suite
+        buffer.extend_from_slice(&[0, 0x2f]); // TLS_RSA_WITH_AES_128_CBC_SHA
+        
+        // Compression methods length
+        buffer.push(1);
+        // Null compression
+        buffer.push(0);
+        
+        // Extensions length placeholder
+        let extensions_len_pos = buffer.len();
+        buffer.extend_from_slice(&[0, 0]);
+        
+        // SNI Extension
+        buffer.extend_from_slice(&[0, 0]); // Extension Type: SNI (0)
+        
+        // SNI extension length placeholder
+        let sni_ext_len_pos = buffer.len();
+        buffer.extend_from_slice(&[0, 0]);
+        
+        // Server Name List Length
+        let name_list_len_pos = buffer.len();
+        buffer.extend_from_slice(&[0, 0]);
+        
+        // Name Type (0 = hostname)
+        buffer.push(0);
+        
+        // Hostname length
+        buffer.extend_from_slice(&(hostname.len() as u16).to_be_bytes());
+        
+        // Hostname
+        buffer.extend_from_slice(hostname.as_bytes());
+        
+        // Fill in lengths
+        let name_list_len = hostname.len() + 3; // type (1) + length (2) + hostname
+        buffer[name_list_len_pos..name_list_len_pos + 2].copy_from_slice(&(name_list_len as u16).to_be_bytes());
+        
+        let sni_ext_len = name_list_len + 2; // name_list_len (2) + name_list
+        buffer[sni_ext_len_pos..sni_ext_len_pos + 2].copy_from_slice(&(sni_ext_len as u16).to_be_bytes());
+        
+        let extensions_len = sni_ext_len + 4; // ext_type (2) + ext_len (2) + ext_data
+        buffer[extensions_len_pos..extensions_len_pos + 2].copy_from_slice(&(extensions_len as u16).to_be_bytes());
+        
+        let handshake_len = buffer.len() - handshake_len_pos - 3;
+        let handshake_len_bytes = [(handshake_len >> 16) as u8, (handshake_len >> 8) as u8, handshake_len as u8];
+        buffer[handshake_len_pos..handshake_len_pos + 3].copy_from_slice(&handshake_len_bytes);
+        
+        let record_len = buffer.len() - record_len_pos - 2;
+        buffer[record_len_pos..record_len_pos + 2].copy_from_slice(&(record_len as u16).to_be_bytes());
+        
+        buffer
+    }
+
     #[test]
-    fn test_sni_extraction() {
-        // This would contain actual TLS ClientHello bytes for testing
-        // For now, just test that the function doesn't panic with empty data
+    fn test_sni_extraction_empty_data() {
         let result = extract_sni_from_client_hello(&[]);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), None);
+    }
+
+    #[test]
+    fn test_sni_extraction_too_short() {
+        let short_data = vec![22, 3, 3, 0, 10]; // Valid start but too short
+        let result = extract_sni_from_client_hello(&short_data);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), None);
+    }
+
+    #[test]
+    fn test_sni_extraction_wrong_content_type() {
+        let mut data = create_client_hello_with_sni("example.com");
+        data[0] = 21; // Change content type from handshake to alert
+        let result = extract_sni_from_client_hello(&data);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), None);
+    }
+
+    #[test]
+    fn test_sni_extraction_valid_hostname() {
+        let hostname = "example.com";
+        let data = create_client_hello_with_sni(hostname);
+        let result = extract_sni_from_client_hello(&data);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), Some(hostname.to_string()));
+    }
+
+    #[test]
+    fn test_sni_extraction_gate_domain() {
+        let hostname = "3818e20a7b12092e.private.hellas.ai";
+        let data = create_client_hello_with_sni(hostname);
+        let result = extract_sni_from_client_hello(&data);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), Some(hostname.to_string()));
+    }
+
+    #[test]
+    fn test_sni_extraction_long_hostname() {
+        let hostname = "very-long-subdomain-name-that-might-cause-issues.with.multiple.subdomains.example.com";
+        let data = create_client_hello_with_sni(hostname);
+        let result = extract_sni_from_client_hello(&data);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), Some(hostname.to_string()));
+    }
+
+    #[test]
+    fn test_parse_sni_extension_too_short() {
+        let short_data = vec![0, 1, 2, 3]; // Less than 5 bytes
+        let result = parse_sni_extension(&short_data);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), None);
+    }
+
+    #[test]
+    fn test_parse_sni_extension_wrong_name_type() {
+        let data = vec![0, 0, 1, 0, 3]; // name_type = 1 instead of 0
+        let result = parse_sni_extension(&data);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), None);
     }
