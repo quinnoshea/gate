@@ -1,0 +1,56 @@
+[package]
+name = "gate-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[features]
+default = []
+cloudflare = ["dep:worker", "dep:sqlx-d1"]
+tests = ["dep:uuid"]
+tracing = ["dep:tracing", "dep:base64", "dep:hex", "dep:getrandom", "dep:lazy_static"]
+tracing-otlp = ["tracing", "dep:opentelemetry", "dep:opentelemetry-otlp", "dep:opentelemetry_sdk", "dep:tracing-opentelemetry", "dep:tracing-subscriber"]
+tracing-prometheus = ["tracing"]
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+config.workspace = true
+http.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx-d1 = { version = "0.2.0", optional = true }
+thiserror.workspace = true
+tokio = { workspace = true, features = ["sync"] }
+url.workspace = true
+uuid = { workspace = true, features = ["v4"], optional = true }
+
+# Optional dependencies for cloudflare feature
+worker = { version = "0.6", optional = true }
+
+# Optional dependencies for tracing feature
+tracing = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
+hex = { workspace = true, optional = true }
+lazy_static = { version = "1.4", optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["js"], optional = true }
+
+# Optional dependencies for tracing-otlp feature (native only)
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+opentelemetry = { version = "0.30", default-features = false, features = ["trace"], optional = true }
+opentelemetry-otlp = { version = "0.30", default-features = false, features = ["trace", "http-proto", "reqwest-blocking-client"], optional = true }
+opentelemetry_sdk = { version = "0.30", default-features = false, features = ["trace", "rt-tokio"], optional = true }
+tracing-opentelemetry = { version = "0.31", default-features = false, optional = true }
+tracing-subscriber = { workspace = true, optional = true }
+
+[dev-dependencies]
+mockall.workspace = true
+tokio = { workspace = true, features = ["test-util", "macros", "rt-multi-thread"] }
+uuid = { workspace = true, features = ["v4"] }

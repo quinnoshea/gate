@@ -1,0 +1,62 @@
+[package]
+name = "gate-frontend"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+build = "build.rs"
+
+[dependencies]
+base64.workspace = true
+
+# Gate Chat UI
+gate-chat-ui = { path = "../chat-ui" }
+
+# Gate Fixtures
+gate-fixtures = { path = "../fixtures" }
+
+# Gate HTTP client
+gate-http = { path = "../http", default-features = false, features = ["client"] }
+gloo = "0.11"
+js-sys = "0.3"
+
+once_cell = "1.19"
+
+# For making API calls to the backend
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream"] }
+# Use workspace dependencies where available
+serde = { workspace = true }
+serde_json = { workspace = true }
+wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
+wasm-bindgen-futures = "0.4"
+wasm-logger = "0.2"
+web-sys = { version = "0.3", features = [
+    "console",
+    "Credential",
+    "CredentialCreationOptions",
+    "CredentialRequestOptions",
+    "CredentialsContainer",
+    "Navigator",
+    "PublicKeyCredential",
+    "PublicKeyCredentialCreationOptions", 
+    "PublicKeyCredentialRequestOptions",
+    "PublicKeyCredentialRpEntity",
+    "PublicKeyCredentialUserEntity",
+    "PublicKeyCredentialParameters",
+    "PublicKeyCredentialDescriptor",
+    "AuthenticatorResponse",
+    "AuthenticatorAttestationResponse",
+    "AuthenticatorAssertionResponse",
+    "AuthenticatorSelectionCriteria",
+    "Window",
+    "HtmlSelectElement",
+    "Event",
+    "Document",
+    "Element",
+    "HtmlElement",
+    "DomTokenList",
+    "Storage"
+] }
+
+# Frontend-specific dependencies
+yew = { version = "0.21", features = ["csr"] }

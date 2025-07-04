@@ -1,0 +1,131 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/chat-ui",
+    "crates/core",
+    "crates/daemon",
+    "crates/fixtures",
+    "crates/frontend",
+    "crates/frontend-common",
+    "crates/frontend-daemon",
+    "crates/frontend-relay",
+    "crates/frontend-tauri",
+    "crates/gui",
+    "crates/http",
+    "crates/p2p",
+    "crates/tlsforward",
+    "crates/sqlx",
+]
+default-members = ["crates/daemon"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["Hellas AI <team@hellas.ai>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/hellas-ai/gate"
+keywords = ["ai", "gateway", "inference", "llm", "api"]
+categories = ["network-programming", "web-programming"]
+
+[workspace.dependencies]
+anyhow = "1.0"
+arc-swap = "1.7"
+async-trait = "0.1"
+
+# Web framework
+axum = { version = "0.8", default-features = false, features = ["json", "macros", "matched-path", "query", "tokio", "http1", "http2"] }
+base64 = "0.22"
+bytes = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+
+# CLI parsing
+clap = { version = "4", features = ["derive"] }
+
+# Configuration
+config = { version = "0.14", features = ["yaml", "toml"] }
+directories = "5"
+futures = "0.3"
+
+# Internal crates
+gate-core = { path = "crates/core" }
+gate-frontend-common = { path = "crates/frontend-common" }
+gate-frontend-daemon = { path = "crates/frontend-daemon" }
+gate-frontend-relay = { path = "crates/frontend-relay" }
+gate-frontend-tauri = { path = "crates/frontend-tauri" }
+gate-http = { path = "crates/http" }
+gate-p2p = { path = "crates/p2p" }
+gate-tlsforward = { path = "crates/tlsforward" }
+gate-sqlx = { path = "crates/sqlx" }
+hex = "0.4"
+http = "1.0"
+hyper = "1.0"
+hyper-util = { version = "*", default-features = false }
+iroh = { version = "0.90", default-features = false, features = ["discovery-local-network"] }
+
+# Testing
+mockall = "0.13"
+
+# Platform-specific (file watching)
+notify = "6.1"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_with = "3.0"
+sha2 = "0.10"
+
+# Error handling
+thiserror = "1.0"
+# Core async runtime
+tokio = { version = "1.0", default-features = false, features = ["sync", "time", "macros"] }
+tokio-util = "0.7"
+toml = "0.8"
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["trace", "cors", "timeout"] }
+tower-service = "0.3"
+
+# Logging and tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# OpenTelemetry - removed from workspace, each crate manages its own version
+url = { version = "2.5", features = ["serde"] }
+
+# OpenAPI documentation
+utoipa = { version = "5.0", features = ["axum_extras", "chrono", "uuid"] }
+utoipa-axum = { version = "0.2" }
+utoipa-rapidoc = { version = "4.0", features = ["axum"] }
+utoipa-redoc = { version = "6.0", features = ["axum"] }
+utoipa-scalar = { version = "0.3", features = ["axum"] }
+utoipa-swagger-ui = { version = "8.0", features = ["axum"] }
+
+# Utilities
+uuid = { version = "1.0", features = ["v4", "serde", "js"] }
+wiremock = "0.6"
+
+[workspace.lints.rust]
+unsafe_code = "warn"
+unused_imports = "warn"
+unused_variables = "warn"
+dead_code = "warn"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"
+nursery = "warn"
+
+[profile.release]
+lto = "fat"           # Enable full link-time optimization for maximum performance
+codegen-units = 1     # Use single codegen unit for better optimization (slower compile)
+strip = true          # Strip debug symbols for smaller binaries
+panic = "abort"       # Use abort instead of unwind for smaller binaries
+opt-level = 3         # Maximum optimization level
+overflow-checks = false  # Disable overflow checks in release for performance
+debug = false         # Ensure no debug info (strip should handle this too)
+
+# Optional: Create a profile for maximum size optimization (useful for WASM)
+[profile.release-min-size]
+inherits = "release"
+opt-level = "z"       # Optimize for size instead of speed
+lto = "fat"          # Still use LTO for size reduction
+strip = true         # Strip all symbols

@@ -1,0 +1,44 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Circle -->
+  <circle cx="512" cy="512" r="480" fill="#1a1a2e" stroke="#16213e" stroke-width="8"/>
+  
+  <!-- Gradient Definitions -->
+  <defs>
+    <linearGradient id="gateGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00d9ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0066cc;stop-opacity:1" />
+    </linearGradient>
+    <radialGradient id="glowGradient">
+      <stop offset="0%" style="stop-color:#00d9ff;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#00d9ff;stop-opacity:0" />
+    </radialGradient>
+  </defs>
+  
+  <!-- Glow Effect -->
+  <circle cx="512" cy="512" r="420" fill="url(#glowGradient)"/>
+  
+  <!-- Gate Design -->
+  <!-- Left Pillar -->
+  <rect x="240" y="240" width="120" height="544" fill="url(#gateGradient)" rx="8"/>
+  <!-- Right Pillar -->
+  <rect x="664" y="240" width="120" height="544" fill="url(#gateGradient)" rx="8"/>
+  
+  <!-- Top Bar -->
+  <rect x="240" y="240" width="544" height="80" fill="url(#gateGradient)" rx="8"/>
+  
+  <!-- Gate Bars (vertical) -->
+  <rect x="420" y="320" width="40" height="464" fill="url(#gateGradient)" rx="4"/>
+  <rect x="512" y="320" width="40" height="464" fill="url(#gateGradient)" rx="4"/>
+  <rect x="604" y="320" width="40" height="464" fill="url(#gateGradient)" rx="4"/>
+  
+  <!-- Central Opening Effect (darker gradient suggesting depth) -->
+  <rect x="360" y="320" width="304" height="464" fill="#0a0a1a" opacity="0.5"/>
+  
+  <!-- Decorative Elements -->
+  <!-- Top ornament -->
+  <circle cx="512" cy="280" r="30" fill="url(#gateGradient)"/>
+  
+  <!-- Side ornaments -->
+  <circle cx="300" cy="280" r="20" fill="url(#gateGradient)"/>
+  <circle cx="724" cy="280" r="20" fill="url(#gateGradient)"/>
+</svg>
