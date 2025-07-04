@@ -75,7 +75,7 @@ serde_with = "3.0"
 sha2 = "0.10"
 
 # Error handling
-thiserror = "1.0"
+thiserror = "2.0"
 # Core async runtime
 tokio = { version = "1.0", default-features = false, features = ["sync", "time", "macros"] }
 tokio-util = "0.7"
