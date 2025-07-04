@@ -13,15 +13,11 @@ env:
 jobs:
   test:
     name: Test
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
     - uses: dtolnay/rust-toolchain@master
       with:
-        toolchain: ${{ matrix.rust }}
         components: rustfmt, clippy
     
     - uses: Swatinem/rust-cache@v2
