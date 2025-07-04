@@ -36,6 +36,6 @@ pub use state::AppState;
 
 // Re-export commonly used types
 #[cfg(feature = "server")]
-pub use axum::{extract, response, Json};
+pub use axum::{Json, extract, response};
 #[cfg(feature = "server")]
 pub use utoipa::OpenApi;
