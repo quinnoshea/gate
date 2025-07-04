@@ -90,7 +90,7 @@ iroh = { workspace = true }
 n0-future = "0.1"
 
 # Certificate generation
-rcgen = { version = "0.13", optional = true }
+rcgen = { version = "0.14", optional = true }
 
 # Serialization
 serde = { workspace = true }
