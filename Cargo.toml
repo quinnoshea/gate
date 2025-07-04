@@ -43,7 +43,7 @@ clap = { version = "4", features = ["derive"] }
 
 # Configuration
 config = { version = "0.14", features = ["yaml", "toml"] }
-directories = "5"
+directories = "6"
 futures = "0.3"
 
 # Internal crates
