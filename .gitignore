@@ -81,7 +81,7 @@ crates/chat-ui/tests/quick_test.rs
 
 # Local development directories
 gate/
-config/
+/config/
 worktrees/
 
 # Tauri

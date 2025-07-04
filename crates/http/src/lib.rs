@@ -7,6 +7,7 @@ pub mod error;
 pub mod types;
 
 #[cfg(feature = "server")]
+#[path = "config/mod.rs"]
 pub mod config;
 #[cfg(feature = "server")]
 pub mod forwarding;

@@ -36,7 +36,7 @@ impl BootstrapService {
                 .text()
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(format!("Failed to check bootstrap status: {}", error_text));
+            return Err(format!("Failed to check bootstrap status: {error_text}"));
         }
 
         response

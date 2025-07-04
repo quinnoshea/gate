@@ -159,7 +159,7 @@ fn render_message_content(content: &Option<Value>, is_streaming: bool, is_last: 
                             if let Some(source) = part.get("source") {
                                 if let Some(data) = source.get("data").and_then(|d| d.as_str()) {
                                     if let Some(media_type) = source.get("media_type").and_then(|m| m.as_str()) {
-                                        let url = format!("data:{};base64,{}", media_type, data);
+                                        let url = format!("data:{media_type};base64,{data}");
                                         html! {
                                             <ImageDisplay url={url} />
                                         }

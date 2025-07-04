@@ -163,7 +163,7 @@ async fn test_bootstrap_status() {
 
     // Check bootstrap status
     let response = client
-        .get(format!("{}/auth/bootstrap/status", base_url))
+        .get(format!("{base_url}/auth/bootstrap/status"))
         .send()
         .await
         .expect("Failed to send request");
@@ -188,7 +188,7 @@ async fn test_bootstrap_token_generation() {
 
     // Get bootstrap token
     let response = client
-        .get(format!("{}/auth/bootstrap/token", base_url))
+        .get(format!("{base_url}/auth/bootstrap/token"))
         .send()
         .await
         .expect("Failed to send request");
@@ -225,7 +225,7 @@ async fn test_admin_list_users() {
     // List users - Note: This will fail with 401 without proper auth
     // In production tests, you'd need to implement proper JWT token generation
     let response = client
-        .get(format!("{}/api/admin/users", base_url))
+        .get(format!("{base_url}/api/admin/users"))
         .header("Authorization", "Bearer test-admin-token")
         .send()
         .await
@@ -263,16 +263,18 @@ async fn test_registration_control() {
         .await
         .expect("Failed to create admin");
 
-    // Now check bootstrap status - should show complete
+    // Now check bootstrap status - should still need bootstrap
+    // because we only created a user, not WebAuthn credentials
     let response = client
-        .get(format!("{}/auth/bootstrap/status", base_url))
+        .get(format!("{base_url}/auth/bootstrap/status"))
         .send()
         .await
         .expect("Failed to send request");
 
     let body: serde_json::Value = response.json().await.expect("Failed to parse JSON");
-    assert_eq!(body["needs_bootstrap"], false);
-    assert_eq!(body["is_complete"], true);
+    // Bootstrap is based on WebAuthn credentials, not just users
+    assert_eq!(body["needs_bootstrap"], true);
+    assert_eq!(body["is_complete"], false);
 
     server.handle.abort();
 }

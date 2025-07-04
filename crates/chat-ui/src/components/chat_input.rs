@@ -49,7 +49,7 @@ fn use_auto_resize_textarea() -> (NodeRef, Callback<()>) {
                 let new_height = scroll_height.min(200);
                 let _ = element
                     .style()
-                    .set_property("height", &format!("{}px", new_height));
+                    .set_property("height", &format!("{new_height}px"));
                 if new_height >= 200 {
                     let _ = element.style().set_property("overflow-y", "auto");
                 }
@@ -245,13 +245,17 @@ pub fn chat_input(props: &ChatInputProps) -> Html {
                             (*attachments).clone(),
                         );
                         callback.emit(message);
-                    } else if has_text && on_send.is_some() {
+                    } else if has_text {
                         // Fallback to text-only if no multimodal callback
-                        on_send.as_ref().unwrap().emit(text);
+                        if let Some(callback) = on_send.as_ref() {
+                            callback.emit(text);
+                        }
                     }
-                } else if has_text && on_send.is_some() {
+                } else if has_text {
                     // Send as text-only message
-                    on_send.as_ref().unwrap().emit(text);
+                    if let Some(callback) = on_send.as_ref() {
+                        callback.emit(text);
+                    }
                 }
 
                 // Clear everything
@@ -486,7 +490,7 @@ fn send_button(props: &SendButtonProps) -> Html {
 
 fn format_file_size(size: usize) -> String {
     if size < 1024 {
-        format!("{} B", size)
+        format!("{size} B")
     } else if size < 1024 * 1024 {
         format!("{:.1} KB", size as f64 / 1024.0)
     } else {

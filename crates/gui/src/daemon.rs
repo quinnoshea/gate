@@ -575,6 +575,7 @@ pub async fn restart_daemon(
     start_daemon(state, app, config).await
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_daemon_server(
     config: DaemonConfig,
     shutdown_rx: tokio::sync::oneshot::Receiver<()>,

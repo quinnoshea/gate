@@ -177,6 +177,48 @@ where
     })))
 }
 
+/// Get bootstrap token for initial admin setup
+#[utoipa::path(
+    get,
+    path = "/auth/bootstrap/token",
+    responses(
+        (status = 200, description = "Bootstrap token", body = serde_json::Value),
+        (status = 400, description = "Bootstrap already complete"),
+        (status = 500, description = "Internal server error"),
+    ),
+    tag = "authentication"
+)]
+#[instrument(name = "get_bootstrap_token", skip(app_state))]
+pub async fn get_bootstrap_token<T>(
+    State(app_state): State<AppState<T>>,
+) -> Result<Json<serde_json::Value>, HttpError>
+where
+    T: Clone + Send + Sync + 'static + AsRef<Arc<BootstrapTokenManager>>,
+{
+    let bootstrap_manager: &Arc<BootstrapTokenManager> = app_state.data.as_ref().as_ref();
+
+    // Check if bootstrap is needed
+    let needs_bootstrap = bootstrap_manager.needs_bootstrap().await.map_err(|e| {
+        HttpError::InternalServerError(format!("Failed to check bootstrap status: {e}"))
+    })?;
+
+    if !needs_bootstrap {
+        return Err(HttpError::BadRequest(
+            "Bootstrap has already been completed".to_string(),
+        ));
+    }
+
+    // Generate token
+    let token = bootstrap_manager.generate_token().await.map_err(|e| {
+        HttpError::InternalServerError(format!("Failed to generate bootstrap token: {e}"))
+    })?;
+
+    Ok(Json(serde_json::json!({
+        "token": token,
+        "message": "Use this token to register the first admin user"
+    })))
+}
+
 /// Get current user information
 #[utoipa::path(
     get,
@@ -233,5 +275,6 @@ where
     router
         .routes(routes!(register_complete))
         .routes(routes!(get_bootstrap_status))
+        .routes(routes!(get_bootstrap_token))
         .routes(routes!(get_current_user))
 }

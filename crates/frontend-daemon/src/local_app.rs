@@ -223,7 +223,7 @@ async fn check_user_role(token: &str) -> Result<String, String> {
     // Get current user info
     let response = client
         .request(Method::GET, "/api/auth/me")
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Authorization", format!("Bearer {token}"))
         .send()
         .await
         .map_err(|e| format!("Failed to get user info: {e}"))?;

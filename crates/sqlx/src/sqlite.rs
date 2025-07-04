@@ -48,8 +48,18 @@ mod tests {
             .await
             .unwrap();
 
-        // Run migrations
+        // Run migrations in order
         sqlx::query(include_str!("../migrations/0001_initial_schema.sql"))
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query(include_str!("../migrations/0002_webauthn_schema.sql"))
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query(include_str!("../migrations/0003_add_user_roles.sql"))
             .execute(&pool)
             .await
             .unwrap();

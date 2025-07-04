@@ -104,10 +104,10 @@ impl MultimodalMessage {
         }
 
         // Add text content after images
-        if let Some(text) = &self.text {
-            if !text.trim().is_empty() {
-                blocks.push(ContentBlock::Text { text: text.clone() });
-            }
+        if let Some(text) = &self.text
+            && !text.trim().is_empty()
+        {
+            blocks.push(ContentBlock::Text { text: text.clone() });
         }
 
         blocks

@@ -32,16 +32,15 @@ fn app() -> Html {
             dark_mode.set(new_state);
 
             // Update the document element class
-            if let Some(window) = window() {
-                if let Some(document) = window.document() {
-                    if let Some(element) = document.document_element() {
-                        let class_list = element.class_list();
-                        if new_state {
-                            let _ = class_list.add_1("dark");
-                        } else {
-                            let _ = class_list.remove_1("dark");
-                        }
-                    }
+            if let Some(window) = window()
+                && let Some(document) = window.document()
+                && let Some(element) = document.document_element()
+            {
+                let class_list = element.class_list();
+                if new_state {
+                    let _ = class_list.add_1("dark");
+                } else {
+                    let _ = class_list.remove_1("dark");
                 }
             }
         })
@@ -201,15 +200,15 @@ fn app() -> Html {
                                 }
                                 Err(e) => {
                                     cassette_error
-                                        .set(Some(format!("Failed to parse cassette: {}", e)));
+                                        .set(Some(format!("Failed to parse cassette: {e}")));
                                 }
                             },
                             Err(e) => {
-                                cassette_error.set(Some(format!("Failed to read response: {}", e)));
+                                cassette_error.set(Some(format!("Failed to read response: {e}")));
                             }
                         },
                         Err(e) => {
-                            cassette_error.set(Some(format!("Failed to load cassette: {}", e)));
+                            cassette_error.set(Some(format!("Failed to load cassette: {e}")));
                         }
                     }
                     loading_cassette.set(false);
@@ -329,6 +328,7 @@ fn app() -> Html {
 }
 
 #[wasm_bindgen(start)]
+#[allow(clippy::main_recursion)]
 pub fn main() {
     console_error_panic_hook::set_once();
     yew::Renderer::<App>::new().render();
