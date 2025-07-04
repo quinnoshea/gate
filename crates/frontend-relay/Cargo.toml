@@ -20,7 +20,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt"] }
 tracing-web = "0.1"
 gloo-timers = "0.3"
-gloo-net = "0.5"
+gloo-net = "0.6"
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
