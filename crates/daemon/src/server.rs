@@ -280,8 +280,8 @@ impl ServerBuilder {
 
         // Add daemon-specific routes
         router = crate::routes::config::add_routes(router);
-        // Custom auth routes are commented out to avoid conflicts with default auth routes
-        // router = crate::routes::auth::add_routes(router);
+        // Add custom auth routes (includes bootstrap endpoints)
+        router = crate::routes::auth::add_routes(router);
         router = crate::routes::admin::add_routes(router);
 
         router

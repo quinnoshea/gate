@@ -447,7 +447,6 @@ async fn check_dns_propagation(record_name: &str, expected_value: &str) -> bool 
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[test]
     fn test_zone_domain_extraction() {
@@ -470,8 +469,7 @@ mod tests {
 
             assert_eq!(
                 zone_domain, expected_zone,
-                "Failed for base_domain: {}",
-                base_domain
+                "Failed for base_domain: {base_domain}"
             );
         }
     }
@@ -506,29 +504,24 @@ mod tests {
 
         for (domain, base_domain, zone_domain, challenge, expected) in test_cases {
             // Simulate the record name construction logic
-            let record_name = if domain.ends_with(&format!(".{}", base_domain)) {
+            let record_name = if domain.ends_with(&format!(".{base_domain}")) {
                 let subdomain_len = domain.len() - base_domain.len() - 1;
                 let subdomain = &domain[..subdomain_len];
 
-                if base_domain != zone_domain && base_domain.ends_with(&format!(".{}", zone_domain))
-                {
+                if base_domain != zone_domain && base_domain.ends_with(&format!(".{zone_domain}")) {
                     let middle_len = base_domain.len() - zone_domain.len() - 1;
                     let middle_part = &base_domain[..middle_len];
-                    format!("{}.{}.{}", challenge, subdomain, middle_part)
+                    format!("{challenge}.{subdomain}.{middle_part}")
                 } else {
-                    format!("{}.{}", challenge, subdomain)
+                    format!("{challenge}.{subdomain}")
                 }
             } else {
-                panic!(
-                    "Domain {} does not match base domain {}",
-                    domain, base_domain
-                );
+                panic!("Domain {domain} does not match base domain {base_domain}");
             };
 
             assert_eq!(
                 record_name, expected,
-                "Failed for domain: {}, base: {}, zone: {}",
-                domain, base_domain, zone_domain
+                "Failed for domain: {domain}, base: {base_domain}, zone: {zone_domain}"
             );
         }
     }
@@ -556,8 +549,7 @@ mod tests {
 
             assert_eq!(
                 matches, should_match,
-                "Failed for dns_value: '{}', expected: '{}', should_match: {}",
-                dns_value, expected_value, should_match
+                "Failed for dns_value: '{dns_value}', expected: '{expected_value}', should_match: {should_match}"
             );
         }
     }

@@ -65,18 +65,13 @@ impl<B: StateBackend> StateBackendTestSuite<B> {
 
         // Test update
         let mut updated_user = retrieved_user;
-        updated_user
-            .metadata
-            .insert("name".to_string(), "Updated Name".to_string());
+        updated_user.name = Some("Updated Name".to_string());
         updated_user.updated_at = Utc::now();
         self.backend.update_user(&updated_user).await?;
 
         // Verify update
         let updated = self.backend.get_user_by_id(&user.id).await?.unwrap();
-        assert_eq!(
-            updated.metadata.get("name"),
-            Some(&"Updated Name".to_string())
-        );
+        assert_eq!(updated.name, Some("Updated Name".to_string()));
 
         // Test non-existent user
         let non_existent = self.backend.get_user_by_id("non-existent").await?;

@@ -50,7 +50,7 @@ async fn fetch_bootstrap_token() -> Result<Option<String>, String> {
                 }
             }
         }
-        Err(e) => Err(format!("Failed to get bootstrap token: {:?}", e)),
+        Err(e) => Err(format!("Failed to get bootstrap token: {e:?}")),
     }
 }
 

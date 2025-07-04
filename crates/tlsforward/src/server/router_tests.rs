@@ -3,7 +3,6 @@
 #[cfg(test)]
 mod tests {
     use crate::common::CreateChallengeRequest;
-    use crate::server::registry::ProxyRegistry;
     use iroh::{NodeId, SecretKey};
 
     // Helper to create a test node ID
@@ -21,7 +20,7 @@ mod tests {
 
         // Test 1: Node can create challenge for its own domain
         let _valid_request = CreateChallengeRequest {
-            domain: format!("{}.private.hellas.ai", short_hash),
+            domain: format!("{short_hash}.private.hellas.ai"),
             challenge: "_acme-challenge".to_string(),
             value: "test-value-123".to_string(),
         };
@@ -63,7 +62,7 @@ mod tests {
 
         for (domain, expected) in test_cases {
             let prefix = domain.split('.').next();
-            assert_eq!(prefix, expected, "Failed for domain: {}", domain);
+            assert_eq!(prefix, expected, "Failed for domain: {domain}");
         }
     }
 }

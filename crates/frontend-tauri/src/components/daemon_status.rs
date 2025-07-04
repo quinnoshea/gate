@@ -262,34 +262,29 @@ impl Component for DaemonStatusComponent {
                 true
             }
             Msg::OpenUrl(url) => {
-                web_sys::console::log_1(&format!("OpenUrl message received for: {}", url).into());
+                web_sys::console::log_1(&format!("OpenUrl message received for: {url}").into());
                 ctx.link().send_message(Msg::AddDebugMessage(format!(
-                    "Attempting to open URL: {}",
-                    url
+                    "Attempting to open URL: {url}"
                 )));
                 let link = ctx.link().clone();
                 spawn_local(async move {
                     web_sys::console::log_1(
-                        &format!("Starting async open_url call for: {}", url).into(),
+                        &format!("Starting async open_url call for: {url}").into(),
                     );
                     match crate::tauri_api::open_url(url.clone()).await {
                         Ok(_) => {
                             web_sys::console::log_1(
-                                &format!("Successfully opened URL: {}", url).into(),
+                                &format!("Successfully opened URL: {url}").into(),
                             );
-                            link.send_message(Msg::AddDebugMessage(format!(
-                                "✓ Opened URL: {}",
-                                url
-                            )));
+                            link.send_message(Msg::AddDebugMessage(format!("✓ Opened URL: {url}")));
                         }
                         Err(e) => {
                             web_sys::console::error_1(
-                                &format!("Failed to open URL {}: {}", url, e).into(),
+                                &format!("Failed to open URL {url}: {e}").into(),
                             );
-                            link.send_message(Msg::SetError(format!("Failed to open URL: {}", e)));
+                            link.send_message(Msg::SetError(format!("Failed to open URL: {e}")));
                             link.send_message(Msg::AddDebugMessage(format!(
-                                "✗ Failed to open URL: {} - Error: {}",
-                                url, e
+                                "✗ Failed to open URL: {url} - Error: {e}"
                             )));
                         }
                     }
@@ -322,8 +317,10 @@ impl Component for DaemonStatusComponent {
                                 "border", "rounded", "px-3", "py-1", "text-sm", "cursor-pointer", "transition-all",
                                 if self.show_debug_log {
                                     if is_dark { "bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600" } else { "bg-gray-200 border-gray-300 text-gray-700 hover:bg-gray-300" }
+                                } else if is_dark {
+                                    "bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700"
                                 } else {
-                                    if is_dark { "bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700" } else { "bg-white border-gray-300 text-gray-600 hover:bg-gray-100" }
+                                    "bg-white border-gray-300 text-gray-600 hover:bg-gray-100"
                                 }
                             )}
                             title={if self.show_debug_log { "Hide debug log" } else { "Show debug log" }}
@@ -334,13 +331,15 @@ impl Component for DaemonStatusComponent {
 
                     <div class="space-y-2">
                         <div class="flex items-center justify-between">
-                            <span class={classes!("text-xs", "uppercase", "tracking-wider", "font-medium", if is_dark { "text-gray-500" } else { "text-gray-500" })}>{"Daemon Status"}</span>
+                            <span class={classes!("text-xs", "uppercase", "tracking-wider", "font-medium", "text-gray-500")}>{"Daemon Status"}</span>
                             <span class={classes!(
                                 "px-2", "py-1", "rounded", "text-xs", "font-medium", "uppercase", "tracking-wider",
                                 if self.is_running {
                                     if is_dark { "text-green-400 bg-green-900/50" } else { "text-green-700 bg-green-50" }
+                                } else if is_dark {
+                                    "text-red-400 bg-red-900/50"
                                 } else {
-                                    if is_dark { "text-red-400 bg-red-900/50" } else { "text-red-700 bg-red-50" }
+                                    "text-red-700 bg-red-50"
                                 }
                             )}>
                                 {if self.is_running {
@@ -356,7 +355,7 @@ impl Component for DaemonStatusComponent {
                         {if let Some(addr) = &self.listen_address {
                             html! {
                                 <div class="flex items-center justify-between">
-                                    <span class={classes!("text-xs", "uppercase", "tracking-wider", "font-medium", if is_dark { "text-gray-500" } else { "text-gray-500" })}>{"Listen Address"}</span>
+                                    <span class={classes!("text-xs", "uppercase", "tracking-wider", "font-medium", "text-gray-500")}>{"Listen Address"}</span>
                                     <span class={classes!("text-sm", "font-mono", if is_dark { "text-gray-200" } else { "text-gray-800" })}>{addr}</span>
                                 </div>
                             }
@@ -368,7 +367,7 @@ impl Component for DaemonStatusComponent {
                             html! {
                                 <>
                                     <div class="flex items-center justify-between">
-                                        <span class={classes!("text-xs", "uppercase", "tracking-wider", "font-medium", if is_dark { "text-gray-500" } else { "text-gray-500" })}>{"Database"}</span>
+                                        <span class={classes!("text-xs", "uppercase", "tracking-wider", "font-medium", "text-gray-500")}>{"Database"}</span>
                                         <span class={classes!("text-sm", "font-mono", if is_dark { "text-gray-200" } else { "text-gray-800" })}>
                                             {if config.database_url.contains(":memory:") {
                                                 "In-memory"
@@ -381,7 +380,7 @@ impl Component for DaemonStatusComponent {
                                     </div>
 
                                     <div class="flex items-center justify-between">
-                                        <span class={classes!("text-xs", "uppercase", "tracking-wider", "font-medium", if is_dark { "text-gray-500" } else { "text-gray-500" })}>{"Upstreams"}</span>
+                                        <span class={classes!("text-xs", "uppercase", "tracking-wider", "font-medium", "text-gray-500")}>{"Upstreams"}</span>
                                         <span class={classes!("text-sm", if is_dark { "text-gray-200" } else { "text-gray-800" })}>
                                             {if config.upstream_count > 0 {
                                                 format!("{} configured", config.upstream_count)
@@ -399,7 +398,7 @@ impl Component for DaemonStatusComponent {
                                         };
                                         html! {
                                             <div class="flex items-center justify-between">
-                                                <span class={classes!("text-xs", "uppercase", "tracking-wider", "font-medium", if is_dark { "text-gray-500" } else { "text-gray-500" })}>{"P2P Node ID"}</span>
+                                                <span class={classes!("text-xs", "uppercase", "tracking-wider", "font-medium", "text-gray-500")}>{"P2P Node ID"}</span>
                                                 <span
                                                     class={classes!("text-xs", "font-mono", "cursor-pointer", if is_dark { "text-gray-200 hover:text-gray-400" } else { "text-gray-800 hover:text-gray-600" })}
                                                     title={node_id.clone()}
@@ -425,7 +424,7 @@ impl Component for DaemonStatusComponent {
                                         let addresses = config.p2p_listen_addresses.join(" ");
                                         html! {
                                             <div class="flex items-center justify-between">
-                                                <span class={classes!("text-xs", "uppercase", "tracking-wider", "font-medium", if is_dark { "text-gray-500" } else { "text-gray-500" })}>{"P2P Listen"}</span>
+                                                <span class={classes!("text-xs", "uppercase", "tracking-wider", "font-medium", "text-gray-500")}>{"P2P Listen"}</span>
                                                 <span class={classes!("text-xs", "font-mono", "max-w-[200px]", "overflow-hidden", "text-ellipsis", "whitespace-nowrap", "text-right", if is_dark { "text-gray-200" } else { "text-gray-800" })} title={addresses.clone()}>
                                                     {addresses}
                                                 </span>
@@ -438,7 +437,7 @@ impl Component for DaemonStatusComponent {
                                     {if config.tlsforward_enabled || config.tlsforward_state.is_some() {
                                         html! {
                                             <div class="flex items-center justify-between">
-                                                <span class={classes!("text-xs", "uppercase", "tracking-wider", "font-medium", if is_dark { "text-gray-500" } else { "text-gray-500" })}>{"TLS Forward"}</span>
+                                                <span class={classes!("text-xs", "uppercase", "tracking-wider", "font-medium", "text-gray-500")}>{"TLS Forward"}</span>
                                                 <span class={classes!("text-sm", if is_dark { "text-gray-200" } else { "text-gray-800" })}>
                                                     {match &config.tlsforward_state {
                                                         Some(TlsForwardState::Disabled) => "Disabled",
@@ -454,7 +453,7 @@ impl Component for DaemonStatusComponent {
                                     } else if !self.show_tlsforward_form {
                                         html! {
                                             <div class="flex items-center justify-between">
-                                                <span class={classes!("text-xs", "uppercase", "tracking-wider", "font-medium", if is_dark { "text-gray-500" } else { "text-gray-500" })}>{"TLS Forward"}</span>
+                                                <span class={classes!("text-xs", "uppercase", "tracking-wider", "font-medium", "text-gray-500")}>{"TLS Forward"}</span>
                                                 <button
                                                     onclick={ctx.link().callback(|_| Msg::ShowTlsForwardForm)}
                                                     class={classes!("text-xs", "font-medium", "border", "rounded", "px-3", "py-1", "cursor-pointer", "transition-colors", if is_dark { "bg-gray-800 hover:bg-gray-700 border-gray-700 text-gray-300" } else { "bg-white hover:bg-gray-50 border-gray-300 text-gray-700" })}
@@ -471,7 +470,7 @@ impl Component for DaemonStatusComponent {
                                         Some(TlsForwardState::Connected { server_address: _, assigned_domain }) => {
                                             html! {
                                                 <div class="flex items-center justify-between">
-                                                    <span class={classes!("text-xs", "uppercase", "tracking-wider", "font-medium", if is_dark { "text-gray-500" } else { "text-gray-500" })}>{"Encrypted URL"}</span>
+                                                    <span class={classes!("text-xs", "uppercase", "tracking-wider", "font-medium", "text-gray-500")}>{"Encrypted URL"}</span>
                                                     <div class="flex items-center gap-2">
                                                         <a
                                                             href={format!("https://{assigned_domain}")}
@@ -481,7 +480,7 @@ impl Component for DaemonStatusComponent {
                                                                 let full_url = format!("https://{assigned_domain}");
                                                                 let link = ctx.link().clone();
                                                                 Callback::from(move |e: MouseEvent| {
-                                                                    web_sys::console::log_1(&format!("Link clicked: {}", full_url).into());
+                                                                    web_sys::console::log_1(&format!("Link clicked: {full_url}").into());
                                                                     e.prevent_default();
                                                                     e.stop_propagation();
                                                                     let url = full_url.clone();
@@ -514,7 +513,7 @@ impl Component for DaemonStatusComponent {
                                         Some(TlsForwardState::Error(msg)) => {
                                             html! {
                                                 <div class="flex items-start justify-between">
-                                                    <span class={classes!("text-xs", "uppercase", "tracking-wider", "font-medium", if is_dark { "text-gray-500" } else { "text-gray-500" })}>{"Status"}</span>
+                                                    <span class={classes!("text-xs", "uppercase", "tracking-wider", "font-medium", "text-gray-500")}>{"Status"}</span>
                                                     <span class={classes!("text-xs", "text-right", "max-w-[200px]", if is_dark { "text-gray-400" } else { "text-gray-500" })}>
                                                         {msg}
                                                     </span>
@@ -564,7 +563,7 @@ impl Component for DaemonStatusComponent {
                                         if self.tlsforward_loading || self.tlsforward_email.is_empty() {
                                             if is_dark { "bg-gray-800 border-gray-700 text-gray-600 cursor-not-allowed" } else { "bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed" }
                                         } else {
-                                            if is_dark { "bg-green-600 hover:bg-green-700 text-white cursor-pointer" } else { "bg-green-600 hover:bg-green-700 text-white cursor-pointer" }
+                                            "bg-green-600 hover:bg-green-700 text-white cursor-pointer"
                                         }
                                     )}
                                 >

@@ -32,7 +32,7 @@ pub struct UpdateUserRoleRequest {
 #[function_component(UserManagement)]
 pub fn user_management() -> Html {
     let auth = use_auth();
-    let users = use_state(|| Vec::<UserInfo>::new());
+    let users = use_state(Vec::<UserInfo>::new);
     let loading = use_state(|| true);
     let error = use_state(|| Option::<String>::None);
     let selected_user = use_state(|| Option::<UserInfo>::None);
@@ -347,7 +347,7 @@ async fn load_users(token: &str) -> Result<Vec<UserInfo>, String> {
 
     let response = client
         .request(Method::GET, "/api/admin/users")
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Authorization", format!("Bearer {token}"))
         .send()
         .await
         .map_err(|e| format!("Failed to load users: {e}"))?;
@@ -357,7 +357,7 @@ async fn load_users(token: &str) -> Result<Vec<UserInfo>, String> {
             .text()
             .await
             .unwrap_or_else(|_| "Unknown error".to_string());
-        return Err(format!("Failed to load users: {}", error_text));
+        return Err(format!("Failed to load users: {error_text}"));
     }
 
     let user_list: UserListResponse = response
@@ -376,8 +376,8 @@ async fn update_user_role(token: &str, user_id: &str, role: &str) -> Result<(), 
     };
 
     let response = client
-        .request(Method::PUT, &format!("/api/admin/users/{}/role", user_id))
-        .header("Authorization", format!("Bearer {}", token))
+        .request(Method::PUT, &format!("/api/admin/users/{user_id}/role"))
+        .header("Authorization", format!("Bearer {token}"))
         .json(&request)
         .send()
         .await
@@ -388,7 +388,7 @@ async fn update_user_role(token: &str, user_id: &str, role: &str) -> Result<(), 
             .text()
             .await
             .unwrap_or_else(|_| "Unknown error".to_string());
-        return Err(format!("Failed to update role: {}", error_text));
+        return Err(format!("Failed to update role: {error_text}"));
     }
 
     Ok(())
@@ -398,8 +398,8 @@ async fn delete_user(token: &str, user_id: &str) -> Result<(), String> {
     let client = create_client().map_err(|e| format!("Failed to create client: {e}"))?;
 
     let response = client
-        .request(Method::DELETE, &format!("/api/admin/users/{}", user_id))
-        .header("Authorization", format!("Bearer {}", token))
+        .request(Method::DELETE, &format!("/api/admin/users/{user_id}"))
+        .header("Authorization", format!("Bearer {token}"))
         .send()
         .await
         .map_err(|e| format!("Failed to delete user: {e}"))?;
@@ -409,7 +409,7 @@ async fn delete_user(token: &str, user_id: &str) -> Result<(), String> {
             .text()
             .await
             .unwrap_or_else(|_| "Unknown error".to_string());
-        return Err(format!("Failed to delete user: {}", error_text));
+        return Err(format!("Failed to delete user: {error_text}"));
     }
 
     Ok(())

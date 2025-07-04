@@ -172,36 +172,33 @@ fn parse_streaming_response(response_str: &str, messages: &mut Vec<ChatMessage>)
     let mut role = "assistant".to_string();
 
     for line in response_str.lines() {
-        if line.starts_with("data: ") {
-            let data_str = &line[6..];
+        if let Some(data_str) = line.strip_prefix("data: ") {
             if data_str == "[DONE]" {
                 break;
             }
 
             if let Ok(chunk) = serde_json::from_str::<Value>(data_str) {
                 // Extract role if present
-                if let Some(choices) = chunk.get("choices").and_then(|v| v.as_array()) {
-                    if let Some(choice) = choices.first() {
-                        if let Some(delta) = choice.get("delta") {
-                            if let Some(r) = delta.get("role").and_then(|v| v.as_str()) {
-                                role = r.to_string();
-                            }
-                            if let Some(content) = delta.get("content").and_then(|v| v.as_str()) {
-                                combined_content.push_str(content);
-                            }
-                        }
+                if let Some(choices) = chunk.get("choices").and_then(|v| v.as_array())
+                    && let Some(choice) = choices.first()
+                    && let Some(delta) = choice.get("delta")
+                {
+                    if let Some(r) = delta.get("role").and_then(|v| v.as_str()) {
+                        role = r.to_string();
+                    }
+                    if let Some(content) = delta.get("content").and_then(|v| v.as_str()) {
+                        combined_content.push_str(content);
                     }
                 }
 
                 // Handle Anthropic streaming format
-                if chunk.get("type").and_then(|v| v.as_str()) == Some("content_block_delta") {
-                    if let Some(text) = chunk
+                if chunk.get("type").and_then(|v| v.as_str()) == Some("content_block_delta")
+                    && let Some(text) = chunk
                         .get("delta")
                         .and_then(|d| d.get("text"))
                         .and_then(|t| t.as_str())
-                    {
-                        combined_content.push_str(text);
-                    }
+                {
+                    combined_content.push_str(text);
                 }
             }
         }
@@ -287,18 +284,18 @@ fn parse_json_response(
             // Google Gemini API
             if let Some(candidates) = response.get("candidates").and_then(|v| v.as_array()) {
                 for candidate in candidates {
-                    if let Some(content) = candidate.get("content") {
-                        if let Some(parts) = content.get("parts").and_then(|v| v.as_array()) {
-                            for part in parts {
-                                if let Some(text) = part.get("text").and_then(|v| v.as_str()) {
-                                    messages.push(ChatMessage {
-                                        role: "assistant".to_string(),
-                                        content: Some(Value::String(text.to_string())),
-                                        tool_calls: None,
-                                        name: None,
-                                        metadata: Default::default(),
-                                    });
-                                }
+                    if let Some(content) = candidate.get("content")
+                        && let Some(parts) = content.get("parts").and_then(|v| v.as_array())
+                    {
+                        for part in parts {
+                            if let Some(text) = part.get("text").and_then(|v| v.as_str()) {
+                                messages.push(ChatMessage {
+                                    role: "assistant".to_string(),
+                                    content: Some(Value::String(text.to_string())),
+                                    tool_calls: None,
+                                    name: None,
+                                    metadata: Default::default(),
+                                });
                             }
                         }
                     }
@@ -353,23 +350,21 @@ fn parse_message_object(message: &Value, messages: &mut Vec<ChatMessage>) -> Res
 /// Extract metadata from streaming response
 fn extract_streaming_metadata(response_str: &str) -> Option<(String, String)> {
     for line in response_str.lines() {
-        if line.starts_with("data: ") {
-            let data_str = &line[6..];
-            if data_str != "[DONE]" {
-                if let Ok(chunk) = serde_json::from_str::<Value>(data_str) {
-                    let id = chunk
-                        .get("id")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("unknown")
-                        .to_string();
-                    let model = chunk
-                        .get("model")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("unknown")
-                        .to_string();
-                    return Some((id, model));
-                }
-            }
+        if let Some(data_str) = line.strip_prefix("data: ")
+            && data_str != "[DONE]"
+            && let Ok(chunk) = serde_json::from_str::<Value>(data_str)
+        {
+            let id = chunk
+                .get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown")
+                .to_string();
+            let model = chunk
+                .get("model")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown")
+                .to_string();
+            return Some((id, model));
         }
     }
     None

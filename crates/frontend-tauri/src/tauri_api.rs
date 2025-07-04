@@ -184,12 +184,12 @@ pub async fn disable_tlsforward() -> Result<String, String> {
 
 /// Open URL in default browser using Tauri opener plugin
 pub async fn open_url(url: String) -> Result<(), String> {
-    web_sys::console::log_1(&format!("Attempting to open URL: {}", url).into());
+    web_sys::console::log_1(&format!("Attempting to open URL: {url}").into());
 
     // Validate URL to restrict to Hellas private URLs only
     if !is_allowed_url(&url) {
-        web_sys::console::error_1(&format!("URL not allowed: {}", url).into());
-        return Err(format!("URL not allowed: {}", url));
+        web_sys::console::error_1(&format!("URL not allowed: {url}").into());
+        return Err(format!("URL not allowed: {url}"));
     }
 
     // Use the opener plugin through Tauri's invoke system
@@ -198,12 +198,12 @@ pub async fn open_url(url: String) -> Result<(), String> {
 
     match invoke("plugin:opener|open_url", args).await {
         Ok(_) => {
-            web_sys::console::log_1(&format!("Successfully opened URL: {}", url).into());
+            web_sys::console::log_1(&format!("Successfully opened URL: {url}").into());
             Ok(())
         }
         Err(e) => {
-            web_sys::console::error_1(&format!("Failed to open URL: {}", e).into());
-            Err(format!("Failed to open URL: {}", e))
+            web_sys::console::error_1(&format!("Failed to open URL: {e}").into());
+            Err(format!("Failed to open URL: {e}"))
         }
     }
 }

@@ -352,11 +352,11 @@ impl CertificateManager {
 
         // Generate self-signed certificate
         let subject_alt_names = vec![domain.to_string(), "localhost".to_string()];
-        let CertifiedKey { cert, key_pair } = generate_simple_self_signed(subject_alt_names)
+        let CertifiedKey { cert, signing_key } = generate_simple_self_signed(subject_alt_names)
             .context("Failed to generate self-signed certificate")?;
 
         let cert_der = cert.der().clone();
-        let key_der = PrivateKeyDer::Pkcs8(key_pair.serialize_der().into());
+        let key_der = PrivateKeyDer::Pkcs8(signing_key.serialize_der().into());
 
         // Create server config
         let config = ServerConfig::builder()

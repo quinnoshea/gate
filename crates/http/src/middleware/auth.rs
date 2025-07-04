@@ -101,6 +101,8 @@ impl AuthProvider for ServiceAuthProvider {
     fn should_skip_auth(&self, path: &str) -> bool {
         // Allow access to WebAuthn endpoints without authentication
         path.starts_with("/auth/webauthn/") ||
+        // Allow access to bootstrap endpoints without authentication
+        path.starts_with("/auth/bootstrap/") ||
         // Default paths that should be public
         path == "/health" || 
         path.starts_with("/swagger-ui") || 
