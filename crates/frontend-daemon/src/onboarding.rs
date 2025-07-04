@@ -12,7 +12,7 @@ async fn fetch_bootstrap_token() -> Result<Option<String>, String> {
     if !is_tauri() {
         return Ok(None);
     }
-    
+
     // Call the Tauri command directly
     #[wasm_bindgen(inline_js = "
     export async function call_get_bootstrap_token() {
@@ -35,7 +35,7 @@ async fn fetch_bootstrap_token() -> Result<Option<String>, String> {
         #[wasm_bindgen(catch)]
         async fn call_get_bootstrap_token() -> Result<JsValue, JsValue>;
     }
-    
+
     match call_get_bootstrap_token().await {
         Ok(result) => {
             if result.is_null() || result.is_undefined() {

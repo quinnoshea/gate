@@ -104,7 +104,8 @@ pub fn local_auth() -> Html {
                         fetched_token.set(Some(result.as_string().unwrap()));
                     } else if !result.is_null() {
                         // Try to parse as JSON
-                        if let Ok(token) = serde_wasm_bindgen::from_value::<Option<String>>(result) {
+                        if let Ok(token) = serde_wasm_bindgen::from_value::<Option<String>>(result)
+                        {
                             fetched_token.set(token);
                         }
                     }
