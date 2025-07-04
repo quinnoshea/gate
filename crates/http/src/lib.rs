@@ -7,6 +7,7 @@ pub mod error;
 pub mod types;
 
 #[cfg(feature = "server")]
+#[path = "config/mod.rs"]
 pub mod config;
 #[cfg(feature = "server")]
 pub mod forwarding;
@@ -35,6 +36,6 @@ pub use state::AppState;
 
 // Re-export commonly used types
 #[cfg(feature = "server")]
-pub use axum::{Json, extract, response};
+pub use axum::{extract, response, Json};
 #[cfg(feature = "server")]
 pub use utoipa::OpenApi;
