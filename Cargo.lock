@@ -2261,7 +2261,7 @@ dependencies = [
  "hyper-util",
  "iroh",
  "rand 0.8.5",
- "rcgen 0.14.1",
+ "rcgen",
  "reqwest",
  "rustls",
  "serde",
@@ -2521,7 +2521,7 @@ dependencies = [
  "iroh",
  "n0-future",
  "rand 0.8.5",
- "rcgen 0.14.1",
+ "rcgen",
  "serde",
  "serde_json",
  "tempfile",
@@ -3816,7 +3816,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8a9aa791c7b5a71b636b7a68207fdebf171ddfc593d9c8506ec4cbc527b6a84"
 dependencies = [
  "implicit-clone-derive",
- "indexmap 2.10.0",
+ "indexmap 1.9.3",
 ]
 
 [[package]]
@@ -3884,7 +3884,7 @@ dependencies = [
 [[package]]
 name = "instant-acme"
 version = "0.8.0"
-source = "git+https://github.com/djc/instant-acme.git#7663d14c0653414b847ee101eb34e61d0036d80b"
+source = "git+https://github.com/djc/instant-acme.git#1e6882656a424e9763f78ae09ad4ad388d3f087e"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -3896,7 +3896,7 @@ dependencies = [
  "hyper",
  "hyper-rustls",
  "hyper-util",
- "rcgen 0.13.2",
+ "rcgen",
  "ring",
  "rustls-pki-types",
  "serde",
@@ -4399,7 +4399,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07033963ba89ebaf1584d767badaa2e8fcec21aedea6b8c0346d487d49c28667"
 dependencies = [
  "cfg-if",
- "windows-targets 0.53.2",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
@@ -6488,19 +6488,6 @@ name = "raw-window-handle"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20675572f6f24e9e76ef639bc5552774ed45f1c30e2951e1e99c59888861c539"
-
-[[package]]
-name = "rcgen"
-version = "0.13.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75e669e5202259b5314d1ea5397316ad400819437857b90861765f24c4cf80a2"
-dependencies = [
- "pem",
- "ring",
- "rustls-pki-types",
- "time",
- "yasna",
-]
 
 [[package]]
 name = "rcgen"
@@ -9534,7 +9521,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
