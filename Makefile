@@ -149,20 +149,20 @@ frontend-relay-build: ## Build relay frontend for production
 ## GUI/Tauri
 gui-dev: ## Run Tauri in development mode
 	@echo "$(GREEN)Starting Tauri development mode...$(NC)"
-	cd crates/gui && PATH="$$HOME/.cache/cargo/bin:$$PATH" $(TAURI) dev
+	cd crates/gui && $(TAURI) dev
 
 gui-build: ## Build native desktop app
 	@echo "$(GREEN)Building native desktop app...$(NC)"
-	cd crates/gui && PATH="$$HOME/.cache/cargo/bin:$$PATH" $(TAURI) build
+	cd crates/gui && $(TAURI) build
 
 gui-build-dev: ## Build native desktop app in debug mode (faster)
 	@echo "$(GREEN)Building native desktop app (debug mode)...$(NC)"
-	cd crates/gui && PATH="$$HOME/.cache/cargo/bin:$$PATH" $(TAURI) build --debug
+	cd crates/gui && $(TAURI) build --debug
 
 gui-build-dmg: ## Build macOS DMG installer (macOS only)
 ifeq ($(UNAME_S),Darwin)
 	@echo "$(GREEN)Building macOS DMG installer...$(NC)"
-	cd crates/gui && PATH="$$HOME/.cache/cargo/bin:$$PATH" $(TAURI) build --bundles dmg
+	cd crates/gui && $(TAURI) build --bundles dmg
 else
 	@echo "$(RED)DMG building is only available on macOS$(NC)"
 	@exit 1
