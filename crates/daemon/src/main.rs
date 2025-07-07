@@ -136,6 +136,14 @@ async fn main() -> Result<()> {
     let webauthn_backend = Arc::new(gate_sqlx::SqlxWebAuthnBackend::new(
         state_backend.pool().clone(),
     ));
+    let bootstrap_manager = Arc::new(BootstrapTokenManager::new(webauthn_backend.clone()));
+    if bootstrap_manager.requires_bootstrap().await? {
+        let token = bootstrap_manager
+                .generate_token()
+                .await
+                .map_err(|e| format!("Failed to generate bootstrap token: {e}"))?;
+        println!("Bootstrap token: {token}");
+    }
 
     // State directory was already created earlier for config watcher
 
