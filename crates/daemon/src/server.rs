@@ -163,15 +163,12 @@ impl ServerBuilder {
 
                 // Also update RP origin to use a relay domain as primary
                 // This ensures the WebAuthn builder has a valid primary origin
-                webauthn_config.rp_origin = "https://gate.private.hellas.ai".to_string();
+                webauthn_config.rp_origin = "https://private.hellas.ai".to_string();
 
                 // Add common Hellas relay patterns
                 webauthn_config
                     .allowed_origins
                     .push("https://*.private.hellas.ai".to_string());
-                webauthn_config
-                    .allowed_origins
-                    .push("https://*.public.hellas.ai".to_string());
                 webauthn_config.allow_subdomains = true; // Enable subdomain matching for relay domains
 
                 // Also keep the original origin if it was configured
