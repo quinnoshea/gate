@@ -15,15 +15,25 @@ pub fn live_chat() -> Html {
     let error = use_state(|| None::<String>);
     let selected_model = use_state(|| None::<String>);
     let available_models = use_state(Vec::<Model>::new);
-    let models_loading = use_state(|| false);
+    let models_loading = use_state(|| true); // Start as true to indicate initial load
     let show_settings = use_state(|| true);
+    let manual_model_input = use_state(String::new);
+    let use_manual_model = use_state(|| false);
 
     // Get the current model name for display
-    let current_model = selected_model
-        .as_ref()
-        .and_then(|id| available_models.iter().find(|m| m.id == *id))
-        .map(|m| m.id.clone())
-        .unwrap_or_else(|| "No model selected".to_string());
+    let current_model = if *use_manual_model {
+        if manual_model_input.is_empty() {
+            "No model entered".to_string()
+        } else {
+            (*manual_model_input).clone()
+        }
+    } else {
+        selected_model
+            .as_ref()
+            .and_then(|id| available_models.iter().find(|m| m.id == *id))
+            .map(|m| m.id.clone())
+            .unwrap_or_else(|| "No model selected".to_string())
+    };
 
     // Convert our messages to chat response format
     let chat_response = ChatResponse {
@@ -64,17 +74,30 @@ pub fn live_chat() -> Html {
         let loading = loading.clone();
         let error = error.clone();
         let selected_model = selected_model.clone();
+        let manual_model_input = manual_model_input.clone();
+        let use_manual_model = use_manual_model.clone();
 
         Callback::from(move |user_message: String| {
             if user_message.trim().is_empty() || *loading {
                 return;
             }
 
-            let model = match &*selected_model {
-                Some(m) => m.clone(),
-                None => {
-                    error.set(Some("Please select a model".to_string()));
+            let model = if *use_manual_model {
+                let manual_model = (*manual_model_input).clone();
+                if manual_model.trim().is_empty() {
+                    error.set(Some("Please enter a model name".to_string()));
                     return;
+                }
+                manual_model
+            } else {
+                match &*selected_model {
+                    Some(m) => m.clone(),
+                    None => {
+                        error.set(Some(
+                            "Please select a model or enter one manually".to_string(),
+                        ));
+                        return;
+                    }
                 }
             };
 
@@ -178,6 +201,22 @@ pub fn live_chat() -> Html {
         })
     };
 
+    let on_manual_model_change = {
+        let manual_model_input = manual_model_input.clone();
+        Callback::from(move |e: InputEvent| {
+            if let Some(input) = e.target_dyn_into::<web_sys::HtmlInputElement>() {
+                manual_model_input.set(input.value());
+            }
+        })
+    };
+
+    let on_toggle_manual_model = {
+        let use_manual_model = use_manual_model.clone();
+        Callback::from(move |_| {
+            use_manual_model.set(!*use_manual_model);
+        })
+    };
+
     html! {
         <div class="flex h-[calc(100vh-100px)] gap-4 p-4 bg-gray-100 dark:bg-gray-900">
             if *show_settings {
@@ -188,34 +227,57 @@ pub fn live_chat() -> Html {
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             {"Model"}
                         </label>
-                        if *models_loading {
-                            <div class="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400 rounded text-sm">
-                                {"Loading models..."}
-                            </div>
-                        } else if available_models.is_empty() {
-                            <div class="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400 rounded text-sm">
-                                {"No models available"}
-                            </div>
-                        } else {
-                            <select
-                                onchange={on_model_change}
-                                class="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded text-sm"
-                                value={selected_model.as_ref().cloned().unwrap_or_default()}
+
+                        // Toggle button for manual model input
+                        <div class="mb-2">
+                            <button
+                                onclick={on_toggle_manual_model}
+                                class="text-sm text-blue-600 dark:text-blue-400 hover:underline"
                             >
-                                <option value="">{"Select a model"}</option>
-                                {available_models.iter().map(|model| {
-                                    html! {
-                                        <option value={model.id.clone()} selected={Some(&model.id) == selected_model.as_ref()}>
-                                            {format!("{} ({})", model.id, model.owned_by)}
-                                        </option>
-                                    }
-                                }).collect::<Html>()}
-                            </select>
-                        }
-                        if !available_models.is_empty() {
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                {format!("{} models available", available_models.len())}
-                            </p>
+                                {if *use_manual_model { "← Use model list" } else { "Enter model manually →" }}
+                            </button>
+                        </div>
+
+                        if *use_manual_model {
+                            // Manual model input
+                            <input
+                                type="text"
+                                placeholder="e.g., gpt-4, claude-3-opus-20240229"
+                                value={(*manual_model_input).clone()}
+                                oninput={on_manual_model_change}
+                                class="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded text-sm"
+                            />
+                        } else {
+                            // Model selector
+                            if *models_loading {
+                                <div class="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400 rounded text-sm">
+                                    {"Loading models..."}
+                                </div>
+                            } else if available_models.is_empty() {
+                                <div class="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400 rounded text-sm">
+                                    {"No models available"}
+                                </div>
+                            } else {
+                                <select
+                                    onchange={on_model_change}
+                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded text-sm"
+                                    value={selected_model.as_ref().cloned().unwrap_or_default()}
+                                >
+                                    <option value="">{"Select a model"}</option>
+                                    {available_models.iter().map(|model| {
+                                        html! {
+                                            <option value={model.id.clone()} selected={Some(&model.id) == selected_model.as_ref()}>
+                                                {format!("{} ({})", model.id, model.owned_by)}
+                                            </option>
+                                        }
+                                    }).collect::<Html>()}
+                                </select>
+                            }
+                            if !available_models.is_empty() {
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    {format!("{} models available", available_models.len())}
+                                </p>
+                            }
                         }
                     </div>
 

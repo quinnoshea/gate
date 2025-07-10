@@ -90,4 +90,4 @@ crates/gui/target/
 # crates/gui/icons/
 .cargo
 gate-debug/
-crates/gui/resources/
+.direnv/

@@ -618,12 +618,11 @@ async fn run_daemon_server(
     let state_dir = StateDir::new();
     state_dir.create_directories().await?;
 
-    // Use SQLite database - either custom URL or persistent file
-    let database_url = config.database_url.unwrap_or_else(|| {
-        let db_path = state_dir.data_dir().join("gate-gui.db");
-        format!("sqlite://{}", db_path.display())
-    });
-    settings.database.url = database_url.clone();
+    // Use SQLite database
+    let database_url = format!(
+        "sqlite://{}",
+        state_dir.data_dir().join("gate.db").display()
+    );
 
     // Enable WebAuthn for private.hellas.ai domain
     settings.auth.webauthn.enabled = true;

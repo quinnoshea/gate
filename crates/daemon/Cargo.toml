@@ -53,6 +53,11 @@ utoipa.workspace = true
 utoipa-axum.workspace = true
 utoipa-scalar.workspace = true
 
+futures.workspace = true
+uuid.workspace = true
+# TODO: Add when ready to integrate real inference
+# catgrad-llms = { git = "https://github.com/hellas-ai/catgrad.git" }
+
 [dev-dependencies]
 futures = "0.3"
 rcgen = "0.14"

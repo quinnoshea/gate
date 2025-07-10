@@ -21,10 +21,6 @@ fn test_settings_with_registration(port: u16, allow_open_registration: bool) -> 
             cors_origins: vec![],
             metrics_port: None,
         },
-        database: DatabaseConfig {
-            url: ":memory:".to_string(),
-            max_connections: 5,
-        },
         auth: AuthConfig {
             jwt: JwtConfig {
                 secret: Some("test-secret".to_string()),
@@ -51,12 +47,8 @@ fn test_settings_with_registration(port: u16, allow_open_registration: bool) -> 
         },
         upstreams: vec![],
         tlsforward: TlsForwardConfig::default(),
-        plugins: PluginConfig {
-            enabled: false,
-            directories: vec![],
-        },
         letsencrypt: LetsEncryptConfig::default(),
-        state_dir: None,
+        local_inference: None,
     }
 }
 
