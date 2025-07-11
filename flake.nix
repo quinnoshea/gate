@@ -110,23 +110,38 @@
 
         devShells.default = pkgs.mkShell {
 
-          inputsFrom = [
-            # Inherit all inputs from the free devShell
-            self.packages.${system}.gate-daemon
-            self.packages.${system}.gate-frontend-daemon
+          # Build inputs needed for development
+          # Based on what gate-daemon and gate-frontend-daemon require
+          nativeBuildInputs = with pkgs; [
+            # Essential build tools
+            pkg-config
+            openssl
+            
+            # Frontend build tools
+            trunk
+            wasm-bindgen-cli
+            nodePackages.tailwindcss
           ];
 
           buildInputs = with pkgs; [
             # Rust toolchain with wasm and native targets
             rustToolchain
 
-            # Build tools
-            pkg-config
+            # Core dependencies
             openssl
             protobuf
             clang
           ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
             mold
+            # Linux GUI dependencies (needed by gate-daemon)
+            libsoup_3
+            pango
+            gdk-pixbuf
+            atk
+            webkitgtk_4_1
+            cairo
+            gio-sharp
+            gtk3
           ] ++ [
             # Development tools
             sqlx-cli
@@ -226,6 +241,7 @@
             cargoLock = {
               lockFile = ./Cargo.lock;
               outputHashes = {
+                "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
                 "instant-acme-0.8.0" = "sha256-0I3ot5mVLnimVz7RLBWpwIsZt0UpYz8jlNouLtePJ18=";
                 "yew-0.21.0" = "sha256-G1F3KyvMAViqypWxmFfdUsgZSERhXSXkLFSq8DGsD1M=";
               };
@@ -269,6 +285,7 @@
             cargoLock = {
               lockFile = ./Cargo.lock;
               outputHashes = {
+                "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
                 "instant-acme-0.8.0" = "sha256-0I3ot5mVLnimVz7RLBWpwIsZt0UpYz8jlNouLtePJ18=";
                 "yew-0.21.0" = "sha256-G1F3KyvMAViqypWxmFfdUsgZSERhXSXkLFSq8DGsD1M=";
               };
@@ -312,6 +329,7 @@
             cargoLock = {
               lockFile = ./Cargo.lock;
               outputHashes = {
+                "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
                 "instant-acme-0.8.0" = "sha256-0I3ot5mVLnimVz7RLBWpwIsZt0UpYz8jlNouLtePJ18=";
                 "yew-0.21.0" = "sha256-G1F3KyvMAViqypWxmFfdUsgZSERhXSXkLFSq8DGsD1M=";
               };
@@ -356,6 +374,7 @@
             cargoLock = {
               lockFile = ./Cargo.lock;
               outputHashes = {
+                "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
                 "instant-acme-0.8.0" = "sha256-0I3ot5mVLnimVz7RLBWpwIsZt0UpYz8jlNouLtePJ18=";
                 "yew-0.21.0" = "sha256-G1F3KyvMAViqypWxmFfdUsgZSERhXSXkLFSq8DGsD1M=";
               };
@@ -462,6 +481,7 @@
             cargoLock = {
               lockFile = ./Cargo.lock;
               outputHashes = {
+                "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
                 "instant-acme-0.8.0" = "sha256-0I3ot5mVLnimVz7RLBWpwIsZt0UpYz8jlNouLtePJ18=";
                 "yew-0.21.0" = "sha256-G1F3KyvMAViqypWxmFfdUsgZSERhXSXkLFSq8DGsD1M=";
               };
@@ -487,6 +507,7 @@
             cargoLock = {
               lockFile = ./Cargo.lock;
               outputHashes = {
+                "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
                 "instant-acme-0.8.0" = "sha256-0I3ot5mVLnimVz7RLBWpwIsZt0UpYz8jlNouLtePJ18=";
                 "yew-0.21.0" = "sha256-G1F3KyvMAViqypWxmFfdUsgZSERhXSXkLFSq8DGsD1M=";
               };

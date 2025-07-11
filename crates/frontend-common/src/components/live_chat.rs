@@ -58,15 +58,18 @@ pub fn live_chat() -> Html {
                 match InferenceService::get_models().await {
                     Ok(models) => {
                         web_sys::console::log_1(&format!("Fetched {} models", models.len()).into());
-                        
+
                         // Set Qwen as default if available
                         if selected_model.is_none() {
-                            if let Some(qwen_model) = models.iter().find(|m| m.id.contains("Qwen")) {
+                            if let Some(qwen_model) = models.iter().find(|m| m.id.contains("Qwen"))
+                            {
                                 selected_model.set(Some(qwen_model.id.clone()));
-                                web_sys::console::log_1(&format!("Set default model to: {}", qwen_model.id).into());
+                                web_sys::console::log_1(
+                                    &format!("Set default model to: {}", qwen_model.id).into(),
+                                );
                             }
                         }
-                        
+
                         available_models.set(models);
                     }
                     Err(e) => {

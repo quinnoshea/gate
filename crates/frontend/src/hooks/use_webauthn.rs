@@ -74,7 +74,8 @@ impl UseWebAuthnHandle {
                                     gloo::console::log!("Registration successful!");
 
                                     // Fetch user role
-                                    match auth_api.get_current_user(&complete_response.token).await {
+                                    match auth_api.get_current_user(&complete_response.token).await
+                                    {
                                         Ok(user_info) => {
                                             // Update auth state with role
                                             auth_context.dispatch(AuthAction::Login(AuthState {
@@ -166,7 +167,8 @@ impl UseWebAuthnHandle {
                                     gloo::console::log!("Authentication successful!");
 
                                     // Fetch user role
-                                    match auth_api.get_current_user(&complete_response.token).await {
+                                    match auth_api.get_current_user(&complete_response.token).await
+                                    {
                                         Ok(user_info) => {
                                             // Update auth state with role
                                             auth_context.dispatch(AuthAction::Login(AuthState {
