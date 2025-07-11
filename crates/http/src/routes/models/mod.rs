@@ -53,17 +53,17 @@ where
     }
 
     // Add local inference models if available
-    if let Some(inference_backend) = &app_state.inference_backend {
-        if let Ok(local_models) = inference_backend.list_models().await {
-            for model in local_models {
-                models.push(json!({
-                    "id": model.id,
-                    "object": "model",
-                    "owned_by": "local",
-                    "created": chrono::Utc::now().timestamp(),
-                    "context_length": model.context_length,
-                }));
-            }
+    if let Some(inference_backend) = &app_state.inference_backend
+        && let Ok(local_models) = inference_backend.list_models().await
+    {
+        for model in local_models {
+            models.push(json!({
+                "id": model.id,
+                "object": "model",
+                "owned_by": "local",
+                "created": chrono::Utc::now().timestamp(),
+                "context_length": model.context_length,
+            }));
         }
     }
 
