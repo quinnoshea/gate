@@ -1,11 +1,21 @@
 //! Authentication API service
 
-use crate::client::{create_authenticated_client, get_client};
-use gate_http::client::auth_typed::UserResponse;
+use crate::client::{get_client, set_auth_token};
 use gate_http::types::{
     AuthCompleteRequest, AuthCompleteResponse, AuthStartResponse, RegisterCompleteRequest,
     RegisterCompleteResponse, RegisterStartResponse,
 };
+use serde::{Deserialize, Serialize};
+
+// Define UserResponse locally since we can't access the typed client
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserResponse {
+    pub id: String,
+    pub name: String,
+    pub role: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
 /// Authentication API service
 #[derive(Clone)]
 pub struct AuthApiService;
@@ -74,9 +84,28 @@ impl AuthApiService {
 
     /// Get current user info
     pub async fn get_current_user(&self, token: &str) -> Result<UserResponse, String> {
-        let client = create_authenticated_client(token)
-            .map_err(|e| format!("Failed to create authenticated client: {e}"))?;
+        // Update the client with the token
+        set_auth_token(Some(token))
+            .map_err(|e| format!("Failed to set auth token: {e}"))?;
+        
+        // Get the authenticated client
+        let client = get_client()
+            .map_err(|e| format!("Failed to get client: {e}"))?;
 
-        client.get_me().await.map_err(|e| e.to_string())
+        // Make the API call
+        let response = client
+            .request(reqwest::Method::GET, "/api/auth/me")
+            .send()
+            .await
+            .map_err(|e| format!("Request failed: {e}"))?;
+
+        if !response.status().is_success() {
+            return Err(format!("Failed to get user info: {}", response.status()));
+        }
+
+        response
+            .json::<UserResponse>()
+            .await
+            .map_err(|e| format!("Failed to parse response: {e}"))
     }
 }
