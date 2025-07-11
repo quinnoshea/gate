@@ -85,12 +85,10 @@ impl AuthApiService {
     /// Get current user info
     pub async fn get_current_user(&self, token: &str) -> Result<UserResponse, String> {
         // Update the client with the token
-        set_auth_token(Some(token))
-            .map_err(|e| format!("Failed to set auth token: {e}"))?;
-        
+        set_auth_token(Some(token)).map_err(|e| format!("Failed to set auth token: {e}"))?;
+
         // Get the authenticated client
-        let client = get_client()
-            .map_err(|e| format!("Failed to get client: {e}"))?;
+        let client = get_client().map_err(|e| format!("Failed to get client: {e}"))?;
 
         // Make the API call
         let response = client

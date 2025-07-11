@@ -187,7 +187,18 @@ async fn main() -> Result<()> {
     }
 
     // Build router
-    let router = ServerBuilder::build_router();
+    let mut router = gate_http::routes::router();
+
+    // Add all route modules
+    router = gate_http::routes::dashboard::add_routes(router);
+    router = gate_http::routes::inference::add_routes(router);
+    router = gate_http::routes::models::add_routes(router);
+    router = gate_http::routes::observability::add_routes(router);
+
+    // Add daemon-specific routes
+    router = gate_daemon::routes::config::add_routes(router);
+    router = gate_daemon::routes::auth::add_routes(router);
+    router = gate_daemon::routes::admin::add_routes(router);
 
     // Get static directory from environment
     let static_dir = std::env::var("GATE_SERVER__STATIC_DIR")

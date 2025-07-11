@@ -219,7 +219,7 @@ pub struct WebAuthnConfig {
     #[serde(default = "default_true")]
     pub allow_subdomains: bool,
     /// Require user verification
-    #[serde(default = "default_true")]
+    #[serde(default = "default_false")]
     pub require_user_verification: bool,
     /// Session timeout in seconds
     #[serde(default = "default_session_timeout")]

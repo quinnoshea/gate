@@ -9,9 +9,8 @@ use gate_core::{StateBackend, WebAuthnBackend};
 use gate_http::{
     AppState, UpstreamRegistry,
     forwarding::ForwardingConfig,
-    middleware::WebAuthnConfig,
+    middleware::{WebAuthnConfig, correlation_id_middleware},
     model_detection,
-    routes::{dashboard, inference, models, observability},
     services::{AuthService, JwtConfig, JwtService, WebAuthnService},
 };
 use std::sync::Arc;
@@ -306,25 +305,6 @@ impl ServerBuilder {
         state.data.webauthn_service.clone()
     }
 
-    /// Build the router (specifically for ServerState)
-    pub fn build_router() -> OpenApiRouter<AppState<ServerState>> {
-        let mut router = gate_http::routes::router();
-
-        // Add all route modules
-        router = dashboard::add_routes(router);
-        router = inference::add_routes(router);
-        router = models::add_routes(router);
-        router = observability::add_routes(router);
-
-        // Add daemon-specific routes
-        router = crate::routes::config::add_routes(router);
-        // Add custom auth routes (includes bootstrap endpoints)
-        router = crate::routes::auth::add_routes(router);
-        router = crate::routes::admin::add_routes(router);
-
-        router
-    }
-
     /// Build the complete axum router with documentation
     pub fn build_axum_router<T>(
         router: OpenApiRouter<AppState<T>>,
@@ -408,18 +388,19 @@ impl ServerBuilder {
             }
         }
 
-        // Convert to regular Axum router and add middleware
+        // Convert to regular Axum router with middleware
+        // Apply middleware before adding state to ensure correct type inference
         router
+            // Apply correlation ID middleware first
+            .layer(axum::middleware::from_fn(correlation_id_middleware))
+            // Then add state
             .with_state(state.clone())
-            // Apply correlation ID middleware first (for all routes)
-            .layer(axum::middleware::from_fn(
-                gate_http::middleware::correlation::correlation_id_middleware,
-            ))
             // Apply auth middleware to routes that need it
             .route_layer(axum::middleware::from_fn_with_state(
                 state.clone(),
                 gate_http::middleware::auth::auth_middleware::<T>,
             ))
+            // Apply CORS last so it applies to all responses
             .layer(
                 CorsLayer::new()
                     .allow_origin(tower_http::cors::Any)
@@ -488,7 +469,19 @@ mod tests {
     #[tokio::test]
     async fn test_router_builds_without_panic() {
         // This test ensures the router can be built without overlapping routes
-        let _router = ServerBuilder::build_router();
+        let mut router = gate_http::routes::router();
+
+        // Add all route modules
+        router = gate_http::routes::dashboard::add_routes(router);
+        router = gate_http::routes::inference::add_routes(router);
+        router = gate_http::routes::models::add_routes(router);
+        router = gate_http::routes::observability::add_routes(router);
+
+        // Add daemon-specific routes
+        router = crate::routes::config::add_routes(router);
+        router = crate::routes::auth::add_routes(router);
+        let _router = crate::routes::admin::add_routes(router);
+
         // If we get here without panic, the test passes
     }
 
