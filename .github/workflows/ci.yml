@@ -59,16 +59,50 @@ jobs:
     
     - name: Build GUI with Nix
       run: |
-        nix develop --command make gui-build
+        if [[ "${{ runner.os }}" == "Linux" ]]; then
+          # Use Nix build directly on Linux to avoid AppImage bundling issues
+          nix build .#gate-gui -L
+          # Copy artifacts to expected location
+          mkdir -p artifacts
+          if [[ -f result/bin/gate-gui ]]; then
+            cp -r result/* artifacts/
+          fi
+          if [[ -f result/share/*.deb ]]; then
+            cp result/share/*.deb artifacts/
+          fi
+        else
+          # Use make target for macOS
+          nix develop --command make gui-build
+        fi
+    
+    - name: Find and prepare artifacts
+      run: |
+        mkdir -p artifacts
+        # Check multiple possible locations for artifacts
+        if [[ "${{ runner.os }}" == "macOS" ]]; then
+          # Look in both standard and custom CARGO_TARGET_DIR locations
+          for dir in target ~/cargo-builds/gate $HOME/cargo-builds/gate; do
+            if [[ -d "$dir/release/bundle" ]]; then
+              echo "Found bundles in $dir/release/bundle"
+              cp -r $dir/release/bundle/dmg/*.dmg artifacts/ 2>/dev/null || true
+              cp -r $dir/release/bundle/macos/*.app artifacts/ 2>/dev/null || true
+              break
+            fi
+          done
+          # Also check crates/gui/target
+          if [[ -d "crates/gui/target/release/bundle" ]]; then
+            echo "Found bundles in crates/gui/target/release/bundle"
+            cp -r crates/gui/target/release/bundle/dmg/*.dmg artifacts/ 2>/dev/null || true
+            cp -r crates/gui/target/release/bundle/macos/*.app artifacts/ 2>/dev/null || true
+          fi
+        fi
+        # List what we found
+        echo "Artifacts found:"
+        ls -la artifacts/ || echo "No artifacts directory"
     
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: gate-gui-${{ matrix.target }}
-        path: |
-          crates/gui/target/release/bundle/dmg/*.dmg
-          crates/gui/target/release/bundle/macos/*.app
-          crates/gui/target/release/bundle/deb/*.deb
-          crates/gui/target/release/bundle/appimage/*.AppImage
-          crates/gui/target/release/bundle/msi/*.msi
+        path: artifacts/*
         if-no-files-found: warn
