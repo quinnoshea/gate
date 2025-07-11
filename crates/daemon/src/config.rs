@@ -3,7 +3,7 @@
 use config::{Config, ConfigError, Environment, File};
 use gate_http::forwarding::UpstreamProvider;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use serde_json::json;
 
 fn default_host() -> String {
     "127.0.0.1".to_string()
@@ -69,6 +69,15 @@ fn default_tlsforward_max_connections() -> usize {
     1000
 }
 
+fn default_local_inference() -> Option<LocalInferenceConfig> {
+    Some(LocalInferenceConfig {
+        enabled: true,
+        max_concurrent_inferences: 1,
+        default_temperature: 0.7,
+        default_max_tokens: 1024,
+    })
+}
+
 fn default_user_role() -> String {
     "user".to_string()
 }
@@ -89,20 +98,32 @@ fn default_tlsforward_addresses() -> Vec<String> {
 }
 
 /// Server configuration
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     /// Server settings
+    #[serde(default)]
     pub server: ServerConfig,
     /// Authentication settings
+    #[serde(default)]
     pub auth: AuthConfig,
     /// Upstream provider settings (supports multiple)
+    #[serde(default)]
     pub upstreams: Vec<UpstreamConfig>,
     /// Relay configuration
+    #[serde(default)]
     pub tlsforward: TlsForwardConfig,
     /// Let's Encrypt configuration
+    #[serde(default)]
     pub letsencrypt: LetsEncryptConfig,
     /// Local inference configuration
+    #[serde(default = "default_local_inference")]
     pub local_inference: Option<LocalInferenceConfig>,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        serde_json::from_value(json!({})).expect("Default settings should always be valid")
+    }
 }
 
 /// Server configuration
@@ -121,9 +142,14 @@ pub struct ServerConfig {
     #[serde(default)]
     pub metrics_port: Option<u16>,
 }
+impl Default for ServerConfig {
+    fn default() -> Self {
+        serde_json::from_value(json!({})).expect("Default settings should always be valid")
+    }
+}
 
 /// Authentication configuration
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthConfig {
     /// WebAuthn configuration
     #[serde(default)]
@@ -134,6 +160,12 @@ pub struct AuthConfig {
     /// Registration configuration
     #[serde(default)]
     pub registration: RegistrationConfig,
+}
+
+impl Default for AuthConfig {
+    fn default() -> Self {
+        serde_json::from_value(json!({})).expect("Default settings should always be valid")
+    }
 }
 
 /// Upstream provider configuration
@@ -154,6 +186,12 @@ pub struct UpstreamConfig {
     /// List of supported models (populated on startup)
     #[serde(default, skip_serializing)]
     pub models: Vec<String>,
+}
+
+impl Default for UpstreamConfig {
+    fn default() -> Self {
+        serde_json::from_value(json!({})).expect("Default settings should always be valid")
+    }
 }
 
 /// WebAuthn configuration
@@ -188,6 +226,12 @@ pub struct WebAuthnConfig {
     pub session_timeout_seconds: u64,
 }
 
+impl Default for WebAuthnConfig {
+    fn default() -> Self {
+        serde_json::from_value(json!({})).expect("Default settings should always be valid")
+    }
+}
+
 /// JWT configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JwtConfig {
@@ -202,8 +246,14 @@ pub struct JwtConfig {
     pub expiration_hours: u64,
 }
 
+impl Default for JwtConfig {
+    fn default() -> Self {
+        serde_json::from_value(json!({})).expect("Default settings should always be valid")
+    }
+}
+
 /// Registration configuration
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegistrationConfig {
     /// Allow open registration after bootstrap
     #[serde(default = "default_false")]
@@ -217,6 +267,12 @@ pub struct RegistrationConfig {
     /// Bootstrap admin role (role assigned to first user)
     #[serde(default = "default_bootstrap_role")]
     pub bootstrap_admin_role: String,
+}
+
+impl Default for RegistrationConfig {
+    fn default() -> Self {
+        serde_json::from_value(json!({})).expect("Default settings should always be valid")
+    }
 }
 
 /// TLS forward configuration
@@ -248,43 +304,33 @@ pub struct TlsForwardConfig {
     pub reconnect_backoff: u64,
 }
 
+impl Default for TlsForwardConfig {
+    fn default() -> Self {
+        serde_json::from_value(json!({})).expect("Default settings should always be valid")
+    }
+}
+
 /// Local inference configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LocalInferenceConfig {
-    /// Directory containing model files
-    pub models_dir: PathBuf,
-    /// List of models to load
-    pub models: Vec<LocalModelConfig>,
+    /// Whether local inference is enabled
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     /// Maximum concurrent inference requests
     #[serde(default = "default_max_concurrent_inferences")]
     pub max_concurrent_inferences: usize,
-}
-
-/// Configuration for a single local model
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LocalModelConfig {
-    /// Model identifier (used in API requests)
-    pub id: String,
-    /// Display name for the model
-    pub name: String,
-    /// Path to model file (relative to models_dir)
-    pub path: PathBuf,
-    /// Model type (e.g., "llama", "mistral", "gpt2")
-    pub model_type: String,
-    /// Context length in tokens
-    pub context_length: u32,
-    /// Whether this model supports chat completions
-    #[serde(default = "default_true")]
-    pub supports_chat: bool,
-    /// Whether this model supports text completions
-    #[serde(default = "default_true")]
-    pub supports_completion: bool,
-    /// Default temperature for inference
+    /// Default temperature for inference when not specified
     #[serde(default = "default_temperature")]
     pub default_temperature: f32,
-    /// Default max tokens for inference
+    /// Default max tokens for inference when not specified
     #[serde(default = "default_max_tokens")]
     pub default_max_tokens: u32,
+}
+
+impl Default for LocalInferenceConfig {
+    fn default() -> Self {
+        serde_json::from_value(json!({})).expect("Default settings should always be valid")
+    }
 }
 
 fn default_max_concurrent_inferences() -> usize {
@@ -319,67 +365,9 @@ pub struct LetsEncryptConfig {
     pub auto_renew_days: u32,
 }
 
-impl Default for ServerConfig {
-    fn default() -> Self {
-        Self {
-            host: default_host(),
-            port: default_port(),
-            cors_origins: Vec::new(),
-            metrics_port: None,
-        }
-    }
-}
-
-impl Default for WebAuthnConfig {
-    fn default() -> Self {
-        Self {
-            enabled: default_true(),
-            rp_id: default_rp_id(),
-            rp_name: default_rp_name(),
-            rp_origin: default_rp_origin(),
-            allowed_origins: Vec::new(),
-            allow_tlsforward_origins: default_true(),
-            allow_subdomains: default_true(),
-            require_user_verification: default_true(),
-            session_timeout_seconds: default_session_timeout(),
-        }
-    }
-}
-
-impl Default for JwtConfig {
-    fn default() -> Self {
-        Self {
-            issuer: default_jwt_issuer(),
-            secret: None,
-            expiration_hours: default_jwt_expiration_hours(),
-        }
-    }
-}
-
 impl Default for LetsEncryptConfig {
     fn default() -> Self {
-        Self {
-            enabled: default_true(),
-            email: None,
-            staging: false,
-            domains: Vec::new(),
-            auto_renew_days: default_auto_renew_days(),
-        }
-    }
-}
-
-impl Default for TlsForwardConfig {
-    fn default() -> Self {
-        Self {
-            enabled: default_true(),
-            tlsforward_addresses: default_tlsforward_addresses(),
-            max_connections: default_tlsforward_max_connections(),
-            secret_key_path: None,
-            heartbeat_interval: default_heartbeat_interval(),
-            auto_reconnect: default_true(),
-            max_reconnect_attempts: default_max_reconnect_attempts(),
-            reconnect_backoff: default_reconnect_backoff(),
-        }
+        serde_json::from_value(json!({})).expect("Default settings should always be valid")
     }
 }
 

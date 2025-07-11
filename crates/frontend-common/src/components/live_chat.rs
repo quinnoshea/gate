@@ -50,6 +50,7 @@ pub fn live_chat() -> Html {
         let available_models = available_models.clone();
         let models_loading = models_loading.clone();
         let error = error.clone();
+        let selected_model = selected_model.clone();
 
         use_effect_with((), move |_| {
             spawn_local(async move {
@@ -57,6 +58,15 @@ pub fn live_chat() -> Html {
                 match InferenceService::get_models().await {
                     Ok(models) => {
                         web_sys::console::log_1(&format!("Fetched {} models", models.len()).into());
+                        
+                        // Set Qwen as default if available
+                        if selected_model.is_none() {
+                            if let Some(qwen_model) = models.iter().find(|m| m.id.contains("Qwen")) {
+                                selected_model.set(Some(qwen_model.id.clone()));
+                                web_sys::console::log_1(&format!("Set default model to: {}", qwen_model.id).into());
+                            }
+                        }
+                        
                         available_models.set(models);
                     }
                     Err(e) => {
@@ -221,7 +231,16 @@ pub fn live_chat() -> Html {
         <div class="flex h-[calc(100vh-100px)] gap-4 p-4 bg-gray-100 dark:bg-gray-900">
             if *show_settings {
                 <div class="w-[300px] bg-white dark:bg-gray-800 rounded-lg p-5 shadow-md overflow-y-auto">
-                    <h2 class="text-xl font-bold text-gray-800 dark:text-gray-200 mb-4">{"Live Chat Settings"}</h2>
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800 dark:text-gray-200">{"Live Chat Settings"}</h2>
+                        <button
+                            onclick={toggle_settings.clone()}
+                            class="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+                            title="Hide sidebar"
+                        >
+                            {"× Sidebar"}
+                        </button>
+                    </div>
 
                     <div class="mb-4">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -283,7 +302,7 @@ pub fn live_chat() -> Html {
 
                     <button
                         onclick={clear_chat}
-                        class="w-full bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white px-4 py-2 rounded text-sm transition-colors mb-4"
+                        class="w-full bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 px-4 py-2 rounded text-sm transition-colors mb-4"
                     >
                         {"Clear Chat"}
                     </button>
@@ -293,27 +312,21 @@ pub fn live_chat() -> Html {
                             {err}
                         </div>
                     }
-
-                    <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                        <h3 class="text-base font-semibold text-gray-700 dark:text-gray-300 mb-3">{"About"}</h3>
-                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                            {"This is a live chat interface that connects to real LLM providers through the Gate API gateway."}
-                        </p>
-                        <p class="text-sm text-gray-600 dark:text-gray-400">
-                            {"Make sure you have configured upstream providers in your Gate instance."}
-                        </p>
-                    </div>
                 </div>
             }
 
             <div class="flex-1 bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden flex flex-col">
                 <div class="p-3 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                    <button
-                        onclick={toggle_settings}
-                        class="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
-                    >
-                        {if *show_settings { "← Hide Settings" } else { "→ Show Settings" }}
-                    </button>
+                    <div class="flex items-center gap-2">
+                        if !*show_settings {
+                            <button
+                                onclick={toggle_settings}
+                                class="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+                            >
+                                {"☰ Sidebar"}
+                            </button>
+                        }
+                    </div>
                     if *loading {
                         <span class="text-sm text-gray-500 dark:text-gray-400">{"Loading..."}</span>
                     }

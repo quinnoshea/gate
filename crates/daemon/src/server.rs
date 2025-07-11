@@ -122,20 +122,8 @@ impl ServerBuilder {
         if let Some(inference_config) = &self.settings.local_inference {
             info!("Initializing local inference service");
 
-            // Convert config paths to absolute if needed
-            let mut config = inference_config.clone();
-            if !config.models_dir.is_absolute()
-                && let Ok(cwd) = std::env::current_dir()
-            {
-                config.models_dir = cwd.join(&config.models_dir);
-            }
-
-            // Make model paths absolute relative to models_dir
-            for model_config in &mut config.models {
-                if !model_config.path.is_absolute() {
-                    model_config.path = config.models_dir.join(&model_config.path);
-                }
-            }
+            // Use the config as-is
+            let config = inference_config.clone();
 
             match crate::services::LocalInferenceServiceBuilder::new(config).build() {
                 Ok(inference_service) => {
@@ -423,11 +411,11 @@ impl ServerBuilder {
         // Convert to regular Axum router and add middleware
         router
             .with_state(state.clone())
-            // Apply correlation middleware first (so it's available to all routes)
+            // Apply correlation ID middleware first (for all routes)
             .layer(axum::middleware::from_fn(
-                gate_http::middleware::correlation_id_middleware,
+                gate_http::middleware::correlation::correlation_id_middleware,
             ))
-            // Apply auth middleware to all routes that need it
+            // Apply auth middleware to routes that need it
             .route_layer(axum::middleware::from_fn_with_state(
                 state.clone(),
                 gate_http::middleware::auth::auth_middleware::<T>,

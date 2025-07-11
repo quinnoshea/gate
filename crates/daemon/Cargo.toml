@@ -55,8 +55,7 @@ utoipa-scalar.workspace = true
 
 futures.workspace = true
 uuid.workspace = true
-# TODO: Add when ready to integrate real inference
-# catgrad-llms = { git = "https://github.com/hellas-ai/catgrad.git" }
+catgrad-llm = { git = "https://github.com/hellas-ai/catgrad", branch = "grw/fix/remove-logging-init"}
 
 [dev-dependencies]
 futures = "0.3"

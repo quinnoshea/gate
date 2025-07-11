@@ -1,6 +1,7 @@
 //! Authentication API service
 
-use crate::client::get_client;
+use crate::client::{create_authenticated_client, get_client};
+use gate_http::client::auth_typed::UserResponse;
 use gate_http::types::{
     AuthCompleteRequest, AuthCompleteResponse, AuthStartResponse, RegisterCompleteRequest,
     RegisterCompleteResponse, RegisterStartResponse,
@@ -69,5 +70,13 @@ impl AuthApiService {
             .auth_complete(request)
             .await
             .map_err(|e| e.to_string())
+    }
+
+    /// Get current user info
+    pub async fn get_current_user(&self, token: &str) -> Result<UserResponse, String> {
+        let client = create_authenticated_client(token)
+            .map_err(|e| format!("Failed to create authenticated client: {e}"))?;
+
+        client.get_me().await.map_err(|e| e.to_string())
     }
 }

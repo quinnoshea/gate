@@ -337,35 +337,6 @@ mod helpers {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-pub struct DaemonConfig {
-    pub port: u16,
-    pub host: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub database_url: Option<String>,
-    #[serde(default)]
-    pub enable_tlsforward: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tlsforward_server: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub letsencrypt_email: Option<String>,
-}
-
-impl Default for DaemonConfig {
-    fn default() -> Self {
-        Self {
-            port: 3000,
-            host: "127.0.0.1".to_string(),
-            database_url: None,
-            enable_tlsforward: false,
-            tlsforward_server: Some(
-                "3dbefb2e3d56c7e32586d9a82167a8a5151f3e0f4b40b7c3d145b9060dde2f14@213.239.212.173:31145".to_string(),
-            ),
-            letsencrypt_email: None,
-        }
-    }
-}
-
 /// Active daemon runtime components
 struct DaemonRuntime {
     app_state: AppState<gate_daemon::ServerState>,
@@ -381,7 +352,7 @@ struct DaemonRuntime {
 
 pub struct DaemonState {
     server_handle: Arc<RwLock<Option<JoinHandle<()>>>>,
-    config: Arc<RwLock<DaemonConfig>>,
+    config: Arc<RwLock<Settings>>,
     runtime: Arc<RwLock<Option<DaemonRuntime>>>,
     tlsforward_state: Arc<RwLock<Option<TlsForwardState>>>,
     // Keep the state receiver to prevent the channel from being dropped
@@ -407,7 +378,7 @@ impl DaemonState {
         let state_dir = StateDir::new();
 
         // Try to load existing config
-        let config = Self::load_config(&state_dir).unwrap_or_else(|_| DaemonConfig::default());
+        let config = Self::load_config(&state_dir).unwrap_or_else(|_| Settings::default());
 
         Self {
             server_handle: Arc::new(RwLock::new(None)),
@@ -423,11 +394,11 @@ impl DaemonState {
         state_dir.config_dir().join("gui-config.json")
     }
 
-    fn load_config(state_dir: &StateDir) -> Result<DaemonConfig> {
+    fn load_config(state_dir: &StateDir) -> Result<Settings> {
         let path = Self::config_path(state_dir);
         if path.exists() {
             let contents = std::fs::read_to_string(&path)?;
-            let config: DaemonConfig = serde_json::from_str(&contents)?;
+            let config: Settings = serde_json::from_str(&contents)?;
             debug!("Loaded GUI config from {}", path.display());
             Ok(config)
         } else {
@@ -456,7 +427,7 @@ impl DaemonState {
 pub async fn start_daemon(
     state: State<'_, DaemonState>,
     app: AppHandle,
-    config: Option<DaemonConfig>,
+    config: Option<Settings>,
 ) -> Result<String, String> {
     let mut handle_guard = state.server_handle.write().await;
 
@@ -465,7 +436,7 @@ pub async fn start_daemon(
     }
 
     // Use provided config or the already loaded config
-    let daemon_config = if let Some(cfg) = config {
+    let mut daemon_config = if let Some(cfg) = config {
         // Update stored config with new config
         *state.config.write().await = cfg.clone();
         cfg
@@ -473,6 +444,20 @@ pub async fn start_daemon(
         // Use the existing loaded config
         state.config.read().await.clone()
     };
+
+    // Ensure local inference is always enabled for GUI
+    if daemon_config.local_inference.is_none() {
+        info!("Enabling local inference for GUI daemon");
+        daemon_config.local_inference = Some(gate_daemon::config::LocalInferenceConfig {
+            enabled: true,
+            max_concurrent_inferences: 1,
+            default_temperature: 0.7,
+            default_max_tokens: 1024,
+        });
+
+        // Update the stored config with local inference
+        state.config.write().await.local_inference = daemon_config.local_inference.clone();
+    }
 
     // Save config to disk
     if let Err(e) = state.save_config().await {
@@ -568,7 +553,7 @@ pub async fn daemon_status(state: State<'_, DaemonState>) -> Result<bool, String
 }
 
 #[tauri::command]
-pub async fn get_daemon_config(state: State<'_, DaemonState>) -> Result<DaemonConfig, String> {
+pub async fn get_daemon_config(state: State<'_, DaemonState>) -> Result<Settings, String> {
     Ok(state.config.read().await.clone())
 }
 
@@ -576,7 +561,7 @@ pub async fn get_daemon_config(state: State<'_, DaemonState>) -> Result<DaemonCo
 pub async fn restart_daemon(
     state: State<'_, DaemonState>,
     app: AppHandle,
-    config: Option<DaemonConfig>,
+    config: Option<Settings>,
 ) -> Result<String, String> {
     // Stop if running
     let _ = stop_daemon(state.clone()).await;
@@ -590,7 +575,7 @@ pub async fn restart_daemon(
 
 #[allow(clippy::too_many_arguments)]
 async fn run_daemon_server(
-    config: DaemonConfig,
+    config: Settings,
     params: DaemonRuntimeParams,
     app: AppHandle,
 ) -> Result<()> {
@@ -606,13 +591,11 @@ async fn run_daemon_server(
 
     info!(
         "Starting embedded daemon server on {}:{}",
-        config.host, config.port
+        config.server.host, config.server.port
     );
 
-    // Create minimal settings for embedded use
-    let mut settings = Settings::default();
-    settings.server.host = config.host.clone();
-    settings.server.port = config.port;
+    // Use the provided settings
+    let mut settings = config;
 
     // Initialize state directory (for config files if needed)
     let state_dir = StateDir::new();
@@ -631,21 +614,6 @@ async fn run_daemon_server(
     settings.auth.webauthn.rp_origin = "https://private.hellas.ai".to_string();
     settings.auth.webauthn.allow_subdomains = true;
     settings.auth.webauthn.allow_tlsforward_origins = true;
-    settings.letsencrypt.enabled = false;
-
-    // Enable TLS forward if configured
-    settings.tlsforward.enabled = config.enable_tlsforward;
-    if let Some(server) = &config.tlsforward_server {
-        settings.tlsforward.tlsforward_addresses = vec![server.clone()];
-    }
-
-    // Configure Let's Encrypt if TLS forward is enabled and email is provided
-    if config.enable_tlsforward
-        && let Some(email) = &config.letsencrypt_email
-    {
-        settings.letsencrypt.enabled = true;
-        settings.letsencrypt.email = Some(email.clone());
-    }
 
     // Create database backend
     let state_backend = Arc::new(SqliteStateBackend::new(&database_url).await?);
@@ -744,11 +712,8 @@ async fn run_daemon_server(
     let secret_key = helpers::load_or_create_p2p_secret_key(&secret_key_path).await?;
 
     // Create endpoint with optional static discovery
-    let tlsforward_servers = if config.enable_tlsforward {
-        config
-            .tlsforward_server
-            .as_ref()
-            .map_or(vec![], |s| vec![s.clone()])
+    let tlsforward_servers = if settings.tlsforward.enabled {
+        settings.tlsforward.tlsforward_addresses.clone()
     } else {
         vec![]
     };
@@ -761,13 +726,9 @@ async fn run_daemon_server(
     .await?;
 
     // Initialize TLS forwarding if enabled
-    let (tlsforward_service_opt, tls_acceptor_opt, p2p_router_opt) = if config.enable_tlsforward
-        && config.letsencrypt_email.is_some()
+    let (tlsforward_service_opt, tls_acceptor_opt, p2p_router_opt) = if settings.tlsforward.enabled
     {
-        info!(
-            "TLS forwarding is configured with email: {:?}",
-            config.letsencrypt_email
-        );
+        info!("TLS forwarding is enabled");
 
         // Setup certificate manager and TLS acceptor
         let (tls_acceptor_inner, cert_manager) =
@@ -822,7 +783,7 @@ async fn run_daemon_server(
                         service.clone(),
                         cert_manager.clone(),
                         tls_acceptor_inner.clone(),
-                        config.letsencrypt_email.clone(),
+                        settings.letsencrypt.email.clone(),
                         endpoint.clone(),
                         tlsforward_state.clone(),
                     )
@@ -842,12 +803,9 @@ async fn run_daemon_server(
                 }
             }
         } else {
-            // TLS forward not enabled with email, return empty tuple
+            // No TLS acceptor, just return p2p router
             (None, None, p2p_router)
         }
-    } else if config.enable_tlsforward {
-        let _ = tlsforward_state_tx.send(Some(TlsForwardState::Disconnected));
-        (None, None, None)
     } else {
         let _ = tlsforward_state_tx.send(None);
         (None, None, None)
@@ -867,7 +825,7 @@ async fn run_daemon_server(
     let _ = runtime_tx.send(runtime);
 
     // Create TCP listener
-    let addr = format!("{}:{}", config.host, config.port);
+    let addr = format!("{}:{}", settings.server.host, settings.server.port);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     info!("Daemon server listening on {}", addr);
 
@@ -905,7 +863,7 @@ pub async fn get_daemon_status(
 
     if is_running {
         let config = state.config.read().await;
-        status.listen_address = Some(format!("{}:{}", config.host, config.port));
+        status.listen_address = Some(format!("{}:{}", config.server.host, config.server.port));
 
         // Check if we have upstreams configured
         if let Some(runtime) = &*state.runtime.read().await {
@@ -927,6 +885,7 @@ pub struct DaemonRuntimeConfig {
     pub p2p_listen_addresses: Vec<String>,
     pub tlsforward_enabled: bool,
     pub tlsforward_state: Option<TlsForwardState>,
+    pub needs_bootstrap: bool,
 }
 
 #[tauri::command]
@@ -940,18 +899,16 @@ pub async fn get_daemon_runtime_config(
 
     let config = state.config.read().await;
     let mut runtime_config = DaemonRuntimeConfig {
-        listen_address: format!("{}:{}", config.host, config.port),
-        database_url: config
-            .database_url
-            .clone()
-            .unwrap_or_else(|| ":memory:".to_string()),
+        listen_address: format!("{}:{}", config.server.host, config.server.port),
+        database_url: ":memory:".to_string(), // GUI always uses in-memory SQLite
         upstream_count: 0,
         auth_enabled: false,
         webauthn_enabled: false,
         p2p_node_id: None,
         p2p_listen_addresses: Vec::new(),
-        tlsforward_enabled: config.enable_tlsforward,
+        tlsforward_enabled: config.tlsforward.enabled,
         tlsforward_state: None,
+        needs_bootstrap: false,
     };
 
     // Get detailed info from runtime
@@ -970,6 +927,15 @@ pub async fn get_daemon_runtime_config(
         let socket_addrs = runtime.endpoint.bound_sockets();
         runtime_config.p2p_listen_addresses =
             socket_addrs.iter().map(|addr| addr.to_string()).collect();
+
+        // Check if bootstrap is needed
+        runtime_config.needs_bootstrap = runtime
+            .app_state
+            .data
+            .bootstrap_manager
+            .needs_bootstrap()
+            .await
+            .unwrap_or(false);
     }
 
     // Get TLS forward state
@@ -997,8 +963,8 @@ pub async fn configure_tlsforward(
 
     // Update configuration
     let mut config = state.config.write().await;
-    config.letsencrypt_email = Some(email);
-    config.enable_tlsforward = true;
+    config.letsencrypt.email = Some(email);
+    config.tlsforward.enabled = true;
     drop(config); // Release the lock before saving
 
     // Save config to disk
@@ -1016,7 +982,7 @@ pub async fn enable_tlsforward(
 ) -> Result<String, String> {
     // Check if email is configured
     let config = state.config.read().await;
-    if config.letsencrypt_email.is_none() {
+    if config.letsencrypt.email.is_none() {
         return Err("Please configure email address first".to_string());
     }
 
@@ -1033,7 +999,7 @@ pub async fn disable_tlsforward(
     app: AppHandle,
 ) -> Result<String, String> {
     let mut config = state.config.write().await;
-    config.enable_tlsforward = false;
+    config.tlsforward.enabled = false;
     let new_config = config.clone();
     drop(config);
 
@@ -1094,7 +1060,7 @@ pub async fn get_bootstrap_url(state: State<'_, DaemonState>) -> Result<Bootstra
 
     // Get the daemon configuration to construct the URL
     let config = state.config.read().await;
-    let base_url = format!("http://{}:{}", config.host, config.port);
+    let base_url = format!("http://{}:{}", config.server.host, config.server.port);
 
     // Check if bootstrap is needed
     let needs_bootstrap = if let Some(runtime) = &*state.runtime.read().await {
