@@ -243,7 +243,7 @@
               outputHashes = {
                 "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
                 "instant-acme-0.8.0" = "sha256-J4plLJvpKUjoxj8DyI9rLGGt7y2HFt+3JO7eVrdirVI=";
-                "yew-0.21.0" = "sha256-G1F3KyvMAViqypWxmFfdUsgZSERhXSXkLFSq8DGsD1M=";
+                "yew-0.21.0" = "sha256-ieVO9Crz61/hefKNCZlY1XSRObIy+8rqgZfEx7pvCxA=";
               };
             };
             
@@ -287,7 +287,7 @@
               outputHashes = {
                 "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
                 "instant-acme-0.8.0" = "sha256-J4plLJvpKUjoxj8DyI9rLGGt7y2HFt+3JO7eVrdirVI=";
-                "yew-0.21.0" = "sha256-G1F3KyvMAViqypWxmFfdUsgZSERhXSXkLFSq8DGsD1M=";
+                "yew-0.21.0" = "sha256-ieVO9Crz61/hefKNCZlY1XSRObIy+8rqgZfEx7pvCxA=";
               };
             };
             
@@ -331,7 +331,7 @@
               outputHashes = {
                 "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
                 "instant-acme-0.8.0" = "sha256-J4plLJvpKUjoxj8DyI9rLGGt7y2HFt+3JO7eVrdirVI=";
-                "yew-0.21.0" = "sha256-G1F3KyvMAViqypWxmFfdUsgZSERhXSXkLFSq8DGsD1M=";
+                "yew-0.21.0" = "sha256-ieVO9Crz61/hefKNCZlY1XSRObIy+8rqgZfEx7pvCxA=";
               };
             };
             
@@ -376,7 +376,7 @@
               outputHashes = {
                 "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
                 "instant-acme-0.8.0" = "sha256-J4plLJvpKUjoxj8DyI9rLGGt7y2HFt+3JO7eVrdirVI=";
-                "yew-0.21.0" = "sha256-G1F3KyvMAViqypWxmFfdUsgZSERhXSXkLFSq8DGsD1M=";
+                "yew-0.21.0" = "sha256-ieVO9Crz61/hefKNCZlY1XSRObIy+8rqgZfEx7pvCxA=";
               };
             };
             cargoBuildFlags = [ "--package" "gate-daemon" ];
@@ -483,7 +483,7 @@
               outputHashes = {
                 "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
                 "instant-acme-0.8.0" = "sha256-J4plLJvpKUjoxj8DyI9rLGGt7y2HFt+3JO7eVrdirVI=";
-                "yew-0.21.0" = "sha256-G1F3KyvMAViqypWxmFfdUsgZSERhXSXkLFSq8DGsD1M=";
+                "yew-0.21.0" = "sha256-ieVO9Crz61/hefKNCZlY1XSRObIy+8rqgZfEx7pvCxA=";
               };
             };
             buildFeatures = [ "server" ];
@@ -509,7 +509,7 @@
               outputHashes = {
                 "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
                 "instant-acme-0.8.0" = "sha256-J4plLJvpKUjoxj8DyI9rLGGt7y2HFt+3JO7eVrdirVI=";
-                "yew-0.21.0" = "sha256-G1F3KyvMAViqypWxmFfdUsgZSERhXSXkLFSq8DGsD1M=";
+                "yew-0.21.0" = "sha256-ieVO9Crz61/hefKNCZlY1XSRObIy+8rqgZfEx7pvCxA=";
               };
             };
             
@@ -580,8 +580,11 @@
             # cargo-tauri.hook will handle everything, including running
             # the beforeBuildCommand from tauri.conf.json
             
-            # On macOS, we need to ensure DMG creation has access to necessary tools
-            preBuild = pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
+            # Set RUSTFLAGS for WASM builds and handle platform-specific setup
+            preBuild = ''
+              # Export RUSTFLAGS for trunk builds (frontend-daemon and frontend-tauri)
+              export RUSTFLAGS="${"$"}{RUSTFLAGS} --cfg getrandom_backend=\"wasm_js\""
+            '' + pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
               # Ensure DMG creation script can find tools
               export PATH="${pkgs.coreutils}/bin:${pkgs.findutils}/bin:${pkgs.gnutar}/bin:$PATH"
               
@@ -657,8 +660,8 @@
               fi
             '';
             
-            # Allow warnings during build
-            RUSTFLAGS = "-A warnings";
+            # Allow warnings during build and configure getrandom for WASM
+            RUSTFLAGS = "-A warnings --cfg getrandom_backend=\"wasm_js\"";
           };
           
           default = self.packages.${system}.gate;

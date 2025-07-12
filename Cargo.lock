@@ -2525,6 +2525,7 @@ dependencies = [
  "base64 0.22.1",
  "gate-chat-ui",
  "gate-http",
+ "getrandom 0.3.3",
  "gloo",
  "js-sys",
  "once_cell",
@@ -2550,6 +2551,7 @@ version = "0.1.0"
 dependencies = [
  "gate-chat-ui",
  "gate-frontend-common",
+ "getrandom 0.3.3",
  "gloo",
  "reqwest",
  "serde",
@@ -2594,6 +2596,7 @@ version = "0.1.0"
 dependencies = [
  "gate-chat-ui",
  "gate-frontend-common",
+ "getrandom 0.3.3",
  "gloo-events",
  "gloo-timers",
  "gloo-utils",
