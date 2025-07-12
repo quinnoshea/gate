@@ -207,6 +207,11 @@ async fn main() -> Result<()> {
     // Build the complete axum router
     let app = ServerBuilder::build_axum_router(router, state.clone(), Some(static_dir));
 
+    // Apply correlation ID middleware
+    let app = app.layer(axum::middleware::from_fn(
+        gate_http::middleware::correlation_id_middleware,
+    ));
+
     // Create HTTP server for stream handling
     let http_server = Arc::new(gate_http::server::HttpServer::new(app.clone()));
 

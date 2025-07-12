@@ -9,7 +9,7 @@ use gate_core::{StateBackend, WebAuthnBackend};
 use gate_http::{
     AppState, UpstreamRegistry,
     forwarding::ForwardingConfig,
-    middleware::{WebAuthnConfig, correlation_id_middleware},
+    middleware::WebAuthnConfig,
     model_detection,
     services::{AuthService, JwtConfig, JwtService, WebAuthnService},
 };
@@ -389,18 +389,13 @@ impl ServerBuilder {
         }
 
         // Convert to regular Axum router with middleware
-        // Apply middleware before adding state to ensure correct type inference
+        // Note: Correlation middleware is applied after building this router to avoid type issues
         router
-            // Apply correlation ID middleware first
-            .layer(axum::middleware::from_fn(correlation_id_middleware))
-            // Then add state
             .with_state(state.clone())
-            // Apply auth middleware to routes that need it
             .route_layer(axum::middleware::from_fn_with_state(
                 state.clone(),
                 gate_http::middleware::auth::auth_middleware::<T>,
             ))
-            // Apply CORS last so it applies to all responses
             .layer(
                 CorsLayer::new()
                     .allow_origin(tower_http::cors::Any)

@@ -663,7 +663,18 @@ async fn run_daemon_server(
     }
 
     // Build router
-    let router = ServerBuilder::build_router();
+    let mut router = gate_http::routes::router();
+
+    // Add all route modules
+    router = gate_http::routes::dashboard::add_routes(router);
+    router = gate_http::routes::inference::add_routes(router);
+    router = gate_http::routes::models::add_routes(router);
+    router = gate_http::routes::observability::add_routes(router);
+
+    // Add daemon-specific routes
+    router = gate_daemon::routes::config::add_routes(router);
+    router = gate_daemon::routes::auth::add_routes(router);
+    router = gate_daemon::routes::admin::add_routes(router);
 
     // Resolve static directory for frontend-daemon
     // In GUI crate, we're ALWAYS in a Tauri app - either dev mode or built
@@ -707,6 +718,11 @@ async fn run_daemon_server(
     info!("Using static directory: {}", static_dir);
     let app = ServerBuilder::build_axum_router(router, app_state.clone(), Some(static_dir.clone()));
 
+    // Apply correlation ID middleware
+    let app = app.layer(axum::middleware::from_fn(
+        gate_http::middleware::correlation_id_middleware,
+    ));
+
     // Create P2P endpoint with persistent key
     let secret_key_path = state_dir.iroh_secret_key_path();
     let secret_key = helpers::load_or_create_p2p_secret_key(&secret_key_path).await?;
@@ -735,12 +751,31 @@ async fn run_daemon_server(
             helpers::setup_certificate_manager(&state_dir, settings.letsencrypt.enabled).await?;
 
         // Create HTTP server for TLS forward handler with same static file serving
-        let api_router = ServerBuilder::build_router();
+        // Build router the same way as in main.rs
+        let mut api_router = gate_http::routes::router();
+
+        // Add all route modules
+        api_router = gate_http::routes::dashboard::add_routes(api_router);
+        api_router = gate_http::routes::inference::add_routes(api_router);
+        api_router = gate_http::routes::models::add_routes(api_router);
+        api_router = gate_http::routes::observability::add_routes(api_router);
+
+        // Add daemon-specific routes
+        api_router = gate_daemon::routes::config::add_routes(api_router);
+        api_router = gate_daemon::routes::auth::add_routes(api_router);
+        api_router = gate_daemon::routes::admin::add_routes(api_router);
+
         let axum_router = ServerBuilder::build_axum_router(
             api_router,
             app_state.clone(),
             Some(static_dir.clone()),
         );
+
+        // Apply correlation ID middleware
+        let axum_router = axum_router.layer(axum::middleware::from_fn(
+            gate_http::middleware::correlation_id_middleware,
+        ));
+
         let http_server = Arc::new(HttpServer::new(axum_router));
 
         let mut p2p_router = None;
