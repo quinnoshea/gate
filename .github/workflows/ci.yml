@@ -47,55 +47,91 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - uses: DeterminateSystems/nix-installer-action@main
+    # Install Rust toolchain
+    - uses: mkroening/rust-toolchain-toml@main
+    - uses: Swatinem/rust-cache@v2
     
-    - uses: DeterminateSystems/magic-nix-cache-action@main
+    # Add WASM target
+    - name: Add WASM target
+      run: rustup target add wasm32-unknown-unknown
     
+    # Cache cargo-installed tools
+    - name: Cache cargo tools
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/bin
+        key: ${{ runner.os }}-cargo-tools-trunk-tauri-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-tools-trunk-tauri-
+          ${{ runner.os }}-cargo-tools-
+    
+    # Install build tools
+    - name: Install build tools
+      run: |
+        # Check if trunk is already installed
+        if ! command -v trunk &> /dev/null; then
+          echo "Installing trunk..."
+          cargo install trunk --locked
+        else
+          echo "trunk is already installed"
+        fi
+        
+        # Check if tauri is already installed
+        if ! command -v cargo-tauri &> /dev/null; then
+          echo "Installing tauri-cli..."
+          cargo install tauri-cli@2.0.0 --locked
+        else
+          echo "tauri-cli is already installed"
+        fi
+    
+    # Install Node.js for tailwindcss
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    
+    - name: Install tailwindcss
+      run: npm install -g tailwindcss
+    
+    # Linux-specific dependencies
     - name: Install Linux dependencies
       if: runner.os == 'Linux'
       run: |
         sudo apt-get update
         sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
     
-    - name: Build GUI with Nix
+    # Build frontends and GUI
+    - name: Build GUI
+      env:
+        RUSTFLAGS: '--cfg getrandom_backend="wasm_js"'
       run: |
-        if [[ "${{ runner.os }}" == "Linux" ]]; then
-          # Use Nix build directly on Linux to avoid AppImage bundling issues
-          nix build .#gate-gui -L
-          # Copy artifacts to expected location
-          mkdir -p artifacts
-          if [[ -f result/bin/gate-gui ]]; then
-            cp -r result/* artifacts/
-          fi
-          if [[ -f result/share/*.deb ]]; then
-            cp result/share/*.deb artifacts/
-          fi
-        else
-          # Use make target for macOS
-          nix develop --command make gui-build
-        fi
+        # Build WASM frontends first
+        cd crates/frontend-daemon && trunk build --release
+        cd ../frontend-tauri && trunk build --release
+        
+        # Build Tauri app
+        cd ../gui && cargo tauri build
     
     - name: Find and prepare artifacts
       run: |
         mkdir -p artifacts
-        # Check multiple possible locations for artifacts
+        
+        # Tauri outputs to crates/gui/target/release/bundle
         if [[ "${{ runner.os }}" == "macOS" ]]; then
-          # Look in both standard and custom CARGO_TARGET_DIR locations
-          for dir in target ~/cargo-builds/gate $HOME/cargo-builds/gate; do
-            if [[ -d "$dir/release/bundle" ]]; then
-              echo "Found bundles in $dir/release/bundle"
-              cp -r $dir/release/bundle/dmg/*.dmg artifacts/ 2>/dev/null || true
-              cp -r $dir/release/bundle/macos/*.app artifacts/ 2>/dev/null || true
-              break
-            fi
-          done
-          # Also check crates/gui/target
+          # macOS: Look for DMG and app bundles
           if [[ -d "crates/gui/target/release/bundle" ]]; then
-            echo "Found bundles in crates/gui/target/release/bundle"
+            echo "Found macOS bundles"
             cp -r crates/gui/target/release/bundle/dmg/*.dmg artifacts/ 2>/dev/null || true
             cp -r crates/gui/target/release/bundle/macos/*.app artifacts/ 2>/dev/null || true
           fi
+        elif [[ "${{ runner.os }}" == "Linux" ]]; then
+          # Linux: Look for deb and AppImage files
+          if [[ -d "crates/gui/target/release/bundle" ]]; then
+            echo "Found Linux bundles"
+            cp -r crates/gui/target/release/bundle/deb/*.deb artifacts/ 2>/dev/null || true
+            cp -r crates/gui/target/release/bundle/appimage/*.AppImage artifacts/ 2>/dev/null || true
+          fi
         fi
+        
         # List what we found
         echo "Artifacts found:"
         ls -la artifacts/ || echo "No artifacts directory"
