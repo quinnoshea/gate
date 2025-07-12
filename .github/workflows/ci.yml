@@ -92,8 +92,10 @@ jobs:
     - name: Install tailwindcss
       run: |
         npm install -g tailwindcss
-        # Add npm global bin to PATH
-        echo "$(npm config get prefix)/bin" >> $GITHUB_PATH
+        # Create symlink to ensure tailwindcss is in PATH
+        sudo ln -sf $(npm config get prefix)/bin/tailwindcss /usr/local/bin/tailwindcss
+        # Verify it's accessible
+        tailwindcss --version
     
     # Linux-specific dependencies
     - name: Install Linux dependencies
@@ -107,9 +109,6 @@ jobs:
       env:
         RUSTFLAGS: '--cfg getrandom_backend="wasm_js"'
       run: |
-        # Add npm global bin to PATH for this session
-        export PATH="$(npm config get prefix)/bin:$PATH"
-        
         # Build WASM frontends first
         cd crates/frontend-daemon && trunk build --release
         cd ../frontend-tauri && trunk build --release
