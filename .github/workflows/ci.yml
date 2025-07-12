@@ -90,7 +90,10 @@ jobs:
         node-version: '20'
     
     - name: Install tailwindcss
-      run: npm install -g tailwindcss
+      run: |
+        npm install -g tailwindcss
+        # Add npm global bin to PATH
+        echo "$(npm config get prefix)/bin" >> $GITHUB_PATH
     
     # Linux-specific dependencies
     - name: Install Linux dependencies
