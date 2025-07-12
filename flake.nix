@@ -242,7 +242,7 @@
               lockFile = ./Cargo.lock;
               outputHashes = {
                 "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
-                "instant-acme-0.8.0" = "sha256-0I3ot5mVLnimVz7RLBWpwIsZt0UpYz8jlNouLtePJ18=";
+                "instant-acme-0.8.0" = "sha256-J4plLJvpKUjoxj8DyI9rLGGt7y2HFt+3JO7eVrdirVI=";
                 "yew-0.21.0" = "sha256-G1F3KyvMAViqypWxmFfdUsgZSERhXSXkLFSq8DGsD1M=";
               };
             };
@@ -286,7 +286,7 @@
               lockFile = ./Cargo.lock;
               outputHashes = {
                 "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
-                "instant-acme-0.8.0" = "sha256-0I3ot5mVLnimVz7RLBWpwIsZt0UpYz8jlNouLtePJ18=";
+                "instant-acme-0.8.0" = "sha256-J4plLJvpKUjoxj8DyI9rLGGt7y2HFt+3JO7eVrdirVI=";
                 "yew-0.21.0" = "sha256-G1F3KyvMAViqypWxmFfdUsgZSERhXSXkLFSq8DGsD1M=";
               };
             };
@@ -330,7 +330,7 @@
               lockFile = ./Cargo.lock;
               outputHashes = {
                 "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
-                "instant-acme-0.8.0" = "sha256-0I3ot5mVLnimVz7RLBWpwIsZt0UpYz8jlNouLtePJ18=";
+                "instant-acme-0.8.0" = "sha256-J4plLJvpKUjoxj8DyI9rLGGt7y2HFt+3JO7eVrdirVI=";
                 "yew-0.21.0" = "sha256-G1F3KyvMAViqypWxmFfdUsgZSERhXSXkLFSq8DGsD1M=";
               };
             };
@@ -375,7 +375,7 @@
               lockFile = ./Cargo.lock;
               outputHashes = {
                 "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
-                "instant-acme-0.8.0" = "sha256-0I3ot5mVLnimVz7RLBWpwIsZt0UpYz8jlNouLtePJ18=";
+                "instant-acme-0.8.0" = "sha256-J4plLJvpKUjoxj8DyI9rLGGt7y2HFt+3JO7eVrdirVI=";
                 "yew-0.21.0" = "sha256-G1F3KyvMAViqypWxmFfdUsgZSERhXSXkLFSq8DGsD1M=";
               };
             };
@@ -482,7 +482,7 @@
               lockFile = ./Cargo.lock;
               outputHashes = {
                 "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
-                "instant-acme-0.8.0" = "sha256-0I3ot5mVLnimVz7RLBWpwIsZt0UpYz8jlNouLtePJ18=";
+                "instant-acme-0.8.0" = "sha256-J4plLJvpKUjoxj8DyI9rLGGt7y2HFt+3JO7eVrdirVI=";
                 "yew-0.21.0" = "sha256-G1F3KyvMAViqypWxmFfdUsgZSERhXSXkLFSq8DGsD1M=";
               };
             };
@@ -508,7 +508,7 @@
               lockFile = ./Cargo.lock;
               outputHashes = {
                 "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
-                "instant-acme-0.8.0" = "sha256-0I3ot5mVLnimVz7RLBWpwIsZt0UpYz8jlNouLtePJ18=";
+                "instant-acme-0.8.0" = "sha256-J4plLJvpKUjoxj8DyI9rLGGt7y2HFt+3JO7eVrdirVI=";
                 "yew-0.21.0" = "sha256-G1F3KyvMAViqypWxmFfdUsgZSERhXSXkLFSq8DGsD1M=";
               };
             };
