@@ -94,8 +94,8 @@ jobs:
         npm install -g tailwindcss
         # Create symlink to ensure tailwindcss is in PATH
         sudo ln -sf $(npm config get prefix)/bin/tailwindcss /usr/local/bin/tailwindcss
-        # Verify it's accessible
-        tailwindcss --version
+        # Verify it's accessible (use full path to avoid shell cache issues)
+        /usr/local/bin/tailwindcss --version
     
     # Linux-specific dependencies
     - name: Install Linux dependencies
