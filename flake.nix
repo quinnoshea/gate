@@ -182,6 +182,10 @@
             
             # Tauri tools
             cargo-tauri
+
+            # github
+            act
+            gh
           ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
             # Linux-specific GUI dependencies
             gtk3
@@ -200,32 +204,6 @@
           
           # Fix for dynamic library loading during build
           LD_LIBRARY_PATH = "${pkgs.openssl.out}/lib:${pkgs.stdenv.cc.cc.lib}/lib";
-          
-          # Configure platform-specific settings
-          shellHook = if pkgs.stdenv.isLinux then ''
-            mkdir -p .cargo
-            cat > .cargo/config.toml << EOF
-            [target.x86_64-unknown-linux-gnu]
-            linker = "clang"
-            rustflags = ["-C", "link-arg=-fuse-ld=${pkgs.mold}/bin/mold"]
-            
-            [target.aarch64-unknown-linux-gnu]
-            linker = "clang"  
-            rustflags = ["-C", "link-arg=-fuse-ld=${pkgs.mold}/bin/mold"]
-            EOF
-          '' else if pkgs.stdenv.isDarwin then ''
-            export CARGO_HOME="$HOME/.cargo-gate-smb"
-            export CARGO_TARGET_DIR="$HOME/cargo-builds/gate"
-
-            mkdir -p .cargo
-            cat > .cargo/config.toml << EOF
-            [target.x86_64-apple-darwin]
-            linker = "clang"
-            
-            [target.aarch64-apple-darwin]
-            linker = "clang"
-            EOF
-          '' else '''';
         };
 
         # Export rustToolchain and customRustPlatform for use by other flakes
