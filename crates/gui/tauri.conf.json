@@ -11,13 +11,10 @@
   "app": {
     "windows": [
       {
-        "title": "Gate AI Gateway",
+        "title": "Hellas Gate",
         "width": 200,
         "height": 300,
-        "center": true,
-        "resizable": true,
-        "devtools": true,
-        "decorations": true
+        "resizable": false
       }
     ],
     "security": {

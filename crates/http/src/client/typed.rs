@@ -22,11 +22,32 @@ pub struct AuthenticatedGateClient {
 impl PublicGateClient {
     /// Create a new public client
     pub fn new(base_url: impl Into<String>) -> Result<Self, ClientError> {
+        Self::new_with_timeout(base_url, None)
+    }
+
+    /// Create a new public client with optional timeout
+    fn new_with_timeout(
+        base_url: impl Into<String>,
+        timeout: Option<Duration>,
+    ) -> Result<Self, ClientError> {
         let base_url = base_url.into().trim_end_matches('/').to_string();
 
-        let client = ClientBuilder::new()
-            .user_agent("gate-client/0.1.0")
-            .build()?;
+        #[cfg(not(target_arch = "wasm32"))]
+        let client = {
+            let mut builder = ClientBuilder::new().user_agent("gate-client/0.1.0");
+            if let Some(timeout) = timeout {
+                builder = builder.timeout(timeout);
+            }
+            builder.build()?
+        };
+
+        #[cfg(target_arch = "wasm32")]
+        let client = {
+            let _ = timeout; // Timeouts not supported on WASM
+            ClientBuilder::new()
+                .user_agent("gate-client/0.1.0")
+                .build()?
+        };
 
         Ok(Self { client, base_url })
     }
@@ -74,12 +95,34 @@ impl AuthenticatedGateClient {
         base_url: impl Into<String>,
         api_key: impl Into<String>,
     ) -> Result<Self, ClientError> {
+        Self::new_with_timeout(base_url, api_key, None)
+    }
+
+    /// Create a new authenticated client with optional timeout
+    fn new_with_timeout(
+        base_url: impl Into<String>,
+        api_key: impl Into<String>,
+        timeout: Option<Duration>,
+    ) -> Result<Self, ClientError> {
         let base_url = base_url.into().trim_end_matches('/').to_string();
         let api_key = api_key.into();
 
-        let client = ClientBuilder::new()
-            .user_agent("gate-client/0.1.0")
-            .build()?;
+        #[cfg(not(target_arch = "wasm32"))]
+        let client = {
+            let mut builder = ClientBuilder::new().user_agent("gate-client/0.1.0");
+            if let Some(timeout) = timeout {
+                builder = builder.timeout(timeout);
+            }
+            builder.build()?
+        };
+
+        #[cfg(target_arch = "wasm32")]
+        let client = {
+            let _ = timeout; // Timeouts not supported on WASM
+            ClientBuilder::new()
+                .user_agent("gate-client/0.1.0")
+                .build()?
+        };
 
         Ok(Self {
             client,
@@ -160,7 +203,7 @@ impl TypedClientBuilder {
             .base_url
             .ok_or_else(|| ClientError::Configuration("base_url is required".into()))?;
 
-        PublicGateClient::new(base_url)
+        PublicGateClient::new_with_timeout(base_url, self.timeout)
     }
 
     /// Build an authenticated client
@@ -172,7 +215,7 @@ impl TypedClientBuilder {
             .base_url
             .ok_or_else(|| ClientError::Configuration("base_url is required".into()))?;
 
-        AuthenticatedGateClient::new(base_url, api_key)
+        AuthenticatedGateClient::new_with_timeout(base_url, api_key, self.timeout)
     }
 }
 
