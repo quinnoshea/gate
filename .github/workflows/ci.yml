@@ -109,7 +109,7 @@ jobs:
       run: |
         cd crates/frontend-daemon && trunk build --release
         cd ../frontend-tauri && trunk build --release
-        cd ../gui && cargo tauri build --release
+        cd ../gui && cargo tauri build
     
     - name: Find and prepare artifacts
       run: |
