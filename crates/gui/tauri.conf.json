@@ -1,5 +1,4 @@
 {
-  "$schema": "https://schema.tauri.app/config/2",
   "productName": "Gate",
   "version": "0.1.0",
   "identifier": "ai.hellas.gate",
@@ -13,8 +12,8 @@
     "windows": [
       {
         "title": "Gate AI Gateway",
-        "width": 600,
-        "height": 500,
+        "width": 200,
+        "height": 300,
         "center": true,
         "resizable": true,
         "devtools": true,
