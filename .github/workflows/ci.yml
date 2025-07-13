@@ -84,18 +84,18 @@ jobs:
           echo "tauri-cli is already installed"
         fi
     
-    # Install Node.js for tailwindcss
-    - uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-    
+    # Install tailwindcss standalone CLI
     - name: Install tailwindcss
       run: |
-        npm install -g tailwindcss
-        # Create symlink to ensure tailwindcss is in PATH
-        sudo ln -sf $(npm config get prefix)/bin/tailwindcss /usr/local/bin/tailwindcss
-        # Verify it's accessible (use full path to avoid shell cache issues)
-        /usr/local/bin/tailwindcss --version
+        # Map runner OS and arch to tailwind binary names
+        case "${{ runner.os }}-${{ runner.arch }}" in
+          "Linux-X64") BINARY="tailwindcss-linux-x64" ;;
+          "macOS-X64") BINARY="tailwindcss-macos-x64" ;;
+          "macOS-ARM64") BINARY="tailwindcss-macos-arm64" ;;
+        esac
+        
+        curl -sL "https://github.com/tailwindlabs/tailwindcss/releases/download/v4.1.11/${BINARY}" -o /usr/local/bin/tailwindcss
+        chmod +x /usr/local/bin/tailwindcss
     
     # Linux-specific dependencies
     - name: Install Linux dependencies
