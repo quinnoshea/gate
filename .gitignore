@@ -89,6 +89,5 @@ worktrees/
 crates/gui/target/
 # Don't ignore icons, they're needed for the build
 # crates/gui/icons/
-.cargo
 gate-debug/
 .direnv/
