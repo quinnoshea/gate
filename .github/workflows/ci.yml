@@ -106,8 +106,6 @@ jobs:
     
     # Build frontends and GUI
     - name: Build GUI
-      env:
-        RUSTFLAGS: '--cfg getrandom_backend="wasm_js"'
       run: |
         # Build WASM frontends first
         cd crates/frontend-daemon && trunk build --release

@@ -580,11 +580,8 @@
             # cargo-tauri.hook will handle everything, including running
             # the beforeBuildCommand from tauri.conf.json
             
-            # Set RUSTFLAGS for WASM builds and handle platform-specific setup
-            preBuild = ''
-              # Export RUSTFLAGS for trunk builds (frontend-daemon and frontend-tauri)
-              export RUSTFLAGS="${"$"}{RUSTFLAGS} --cfg getrandom_backend=\"wasm_js\""
-            '' + pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
+            # Handle platform-specific setup
+            preBuild = pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
               # Ensure DMG creation script can find tools
               export PATH="${pkgs.coreutils}/bin:${pkgs.findutils}/bin:${pkgs.gnutar}/bin:$PATH"
               
@@ -660,8 +657,8 @@
               fi
             '';
             
-            # Allow warnings during build and configure getrandom for WASM
-            RUSTFLAGS = "-A warnings --cfg getrandom_backend=\"wasm_js\"";
+            # Allow warnings during build
+            RUSTFLAGS = "-A warnings";
           };
           
           default = self.packages.${system}.gate;
