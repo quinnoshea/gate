@@ -112,20 +112,20 @@ jobs:
       run: |
         mkdir -p artifacts
         
-        # Tauri outputs to crates/gui/target/release/bundle
+        # Tauri outputs to target/release/bundle
         if [[ "${{ runner.os }}" == "macOS" ]]; then
           # macOS: Look for DMG and app bundles
-          if [[ -d "crates/gui/target/release/bundle" ]]; then
+          if [[ -d "target/release/bundle" ]]; then
             echo "Found macOS bundles"
-            cp -r crates/gui/target/release/bundle/dmg/*.dmg artifacts/ 2>/dev/null || true
-            cp -r crates/gui/target/release/bundle/macos/*.app artifacts/ 2>/dev/null || true
+            cp -r target/release/bundle/dmg/*.dmg artifacts/ 2>/dev/null || true
+            cp -r target/release/bundle/macos/*.app artifacts/ 2>/dev/null || true
           fi
         elif [[ "${{ runner.os }}" == "Linux" ]]; then
           # Linux: Look for deb and AppImage files
-          if [[ -d "crates/gui/target/release/bundle" ]]; then
+          if [[ -d "target/release/bundle" ]]; then
             echo "Found Linux bundles"
-            cp -r crates/gui/target/release/bundle/deb/*.deb artifacts/ 2>/dev/null || true
-            cp -r crates/gui/target/release/bundle/appimage/*.AppImage artifacts/ 2>/dev/null || true
+            cp -r target/release/bundle/deb/*.deb artifacts/ 2>/dev/null || true
+            cp -r target/release/bundle/appimage/*.AppImage artifacts/ 2>/dev/null || true
           fi
         fi
         
