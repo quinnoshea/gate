@@ -107,11 +107,11 @@ jobs:
     # Build frontends and GUI
     - name: Build GUI
       run: |
-        # Build WASM frontends first
-        cd crates/frontend-daemon && trunk build --release
-        cd ../frontend-tauri && trunk build --release
+        # Build WASM frontends first with appropriate RUSTFLAGS
+        cd crates/frontend-daemon && RUSTFLAGS='--cfg getrandom_backend="wasm_js"' trunk build --release
+        cd ../frontend-tauri && RUSTFLAGS='--cfg getrandom_backend="wasm_js"' trunk build --release
         
-        # Build Tauri app
+        # Build Tauri app (native, no special RUSTFLAGS)
         cd ../gui && cargo tauri build
     
     - name: Find and prepare artifacts
