@@ -79,7 +79,7 @@ jobs:
         # Check if tauri is already installed
         if ! command -v cargo-tauri &> /dev/null; then
           echo "Installing tauri-cli..."
-          cargo install tauri-cli@2.0.0 --locked
+          cargo install tauri-cli@2 --locked
         else
           echo "tauri-cli is already installed"
         fi
