@@ -1,24 +1,20 @@
 {
-  "$schema": "https://schema.tauri.app/config/2",
   "productName": "Gate",
   "version": "0.1.0",
   "identifier": "ai.hellas.gate",
   "build": {
     "frontendDist": "../frontend-tauri/dist",
     "devUrl": "http://localhost:8082",
-    "beforeDevCommand": "sh -c 'cd ../frontend-tauri && trunk serve'",
-    "beforeBuildCommand": "sh -c 'cd ../frontend-daemon && trunk build && cd ../frontend-tauri && trunk build'"
+    "beforeDevCommand": "sh -c 'cd frontend-tauri && trunk serve'",
+    "beforeBuildCommand": "(cd frontend-daemon && trunk build --release) && (cd frontend-tauri && trunk build --release)"
   },
   "app": {
     "windows": [
       {
-        "title": "Gate AI Gateway",
-        "width": 600,
-        "height": 500,
-        "center": true,
-        "resizable": true,
-        "devtools": true,
-        "decorations": true
+        "title": "Hellas Gate",
+        "width": 200,
+        "height": 300,
+        "resizable": false
       }
     ],
     "security": {

@@ -1,4 +1,4 @@
-# Rust
+#= Rust
 *result
 .claude/
 target/
@@ -70,6 +70,7 @@ yarn-error.log*
 *.db-wal
 
 # Frontend build artifacts
+crates/gui/resources/
 crates/frontend/dist/
 crates/frontend/dist
 crates/frontend/assets/tailwind.output.css
@@ -88,6 +89,5 @@ worktrees/
 crates/gui/target/
 # Don't ignore icons, they're needed for the build
 # crates/gui/icons/
-.cargo
 gate-debug/
-crates/gui/resources/
+.direnv/

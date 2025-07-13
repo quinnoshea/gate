@@ -110,23 +110,38 @@
 
         devShells.default = pkgs.mkShell {
 
-          inputsFrom = [
-            # Inherit all inputs from the free devShell
-            self.packages.${system}.gate-daemon
-            self.packages.${system}.gate-frontend-daemon
+          # Build inputs needed for development
+          # Based on what gate-daemon and gate-frontend-daemon require
+          nativeBuildInputs = with pkgs; [
+            # Essential build tools
+            pkg-config
+            openssl
+            
+            # Frontend build tools
+            trunk
+            wasm-bindgen-cli
+            nodePackages.tailwindcss
           ];
 
           buildInputs = with pkgs; [
             # Rust toolchain with wasm and native targets
             rustToolchain
 
-            # Build tools
-            pkg-config
+            # Core dependencies
             openssl
             protobuf
             clang
           ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
             mold
+            # Linux GUI dependencies (needed by gate-daemon)
+            libsoup_3
+            pango
+            gdk-pixbuf
+            atk
+            webkitgtk_4_1
+            cairo
+            gio-sharp
+            gtk3
           ] ++ [
             # Development tools
             sqlx-cli
@@ -167,6 +182,10 @@
             
             # Tauri tools
             cargo-tauri
+
+            # github
+            act
+            gh
           ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
             # Linux-specific GUI dependencies
             gtk3
@@ -185,32 +204,6 @@
           
           # Fix for dynamic library loading during build
           LD_LIBRARY_PATH = "${pkgs.openssl.out}/lib:${pkgs.stdenv.cc.cc.lib}/lib";
-          
-          # Configure platform-specific settings
-          shellHook = if pkgs.stdenv.isLinux then ''
-            mkdir -p .cargo
-            cat > .cargo/config.toml << EOF
-            [target.x86_64-unknown-linux-gnu]
-            linker = "clang"
-            rustflags = ["-C", "link-arg=-fuse-ld=${pkgs.mold}/bin/mold"]
-            
-            [target.aarch64-unknown-linux-gnu]
-            linker = "clang"  
-            rustflags = ["-C", "link-arg=-fuse-ld=${pkgs.mold}/bin/mold"]
-            EOF
-          '' else if pkgs.stdenv.isDarwin then ''
-            export CARGO_HOME="$HOME/.cargo-gate-smb"
-            export CARGO_TARGET_DIR="$HOME/cargo-builds/gate"
-
-            mkdir -p .cargo
-            cat > .cargo/config.toml << EOF
-            [target.x86_64-apple-darwin]
-            linker = "clang"
-            
-            [target.aarch64-apple-darwin]
-            linker = "clang"
-            EOF
-          '' else '''';
         };
 
         # Export rustToolchain and customRustPlatform for use by other flakes
@@ -226,8 +219,9 @@
             cargoLock = {
               lockFile = ./Cargo.lock;
               outputHashes = {
-                "instant-acme-0.8.0" = "sha256-0I3ot5mVLnimVz7RLBWpwIsZt0UpYz8jlNouLtePJ18=";
-                "yew-0.21.0" = "sha256-G1F3KyvMAViqypWxmFfdUsgZSERhXSXkLFSq8DGsD1M=";
+                "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
+                "instant-acme-0.8.0" = "sha256-J4plLJvpKUjoxj8DyI9rLGGt7y2HFt+3JO7eVrdirVI=";
+                "yew-0.21.0" = "sha256-ieVO9Crz61/hefKNCZlY1XSRObIy+8rqgZfEx7pvCxA=";
               };
             };
             
@@ -269,8 +263,9 @@
             cargoLock = {
               lockFile = ./Cargo.lock;
               outputHashes = {
-                "instant-acme-0.8.0" = "sha256-0I3ot5mVLnimVz7RLBWpwIsZt0UpYz8jlNouLtePJ18=";
-                "yew-0.21.0" = "sha256-G1F3KyvMAViqypWxmFfdUsgZSERhXSXkLFSq8DGsD1M=";
+                "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
+                "instant-acme-0.8.0" = "sha256-J4plLJvpKUjoxj8DyI9rLGGt7y2HFt+3JO7eVrdirVI=";
+                "yew-0.21.0" = "sha256-ieVO9Crz61/hefKNCZlY1XSRObIy+8rqgZfEx7pvCxA=";
               };
             };
             
@@ -312,8 +307,9 @@
             cargoLock = {
               lockFile = ./Cargo.lock;
               outputHashes = {
-                "instant-acme-0.8.0" = "sha256-0I3ot5mVLnimVz7RLBWpwIsZt0UpYz8jlNouLtePJ18=";
-                "yew-0.21.0" = "sha256-G1F3KyvMAViqypWxmFfdUsgZSERhXSXkLFSq8DGsD1M=";
+                "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
+                "instant-acme-0.8.0" = "sha256-J4plLJvpKUjoxj8DyI9rLGGt7y2HFt+3JO7eVrdirVI=";
+                "yew-0.21.0" = "sha256-ieVO9Crz61/hefKNCZlY1XSRObIy+8rqgZfEx7pvCxA=";
               };
             };
             
@@ -356,8 +352,9 @@
             cargoLock = {
               lockFile = ./Cargo.lock;
               outputHashes = {
-                "instant-acme-0.8.0" = "sha256-0I3ot5mVLnimVz7RLBWpwIsZt0UpYz8jlNouLtePJ18=";
-                "yew-0.21.0" = "sha256-G1F3KyvMAViqypWxmFfdUsgZSERhXSXkLFSq8DGsD1M=";
+                "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
+                "instant-acme-0.8.0" = "sha256-J4plLJvpKUjoxj8DyI9rLGGt7y2HFt+3JO7eVrdirVI=";
+                "yew-0.21.0" = "sha256-ieVO9Crz61/hefKNCZlY1XSRObIy+8rqgZfEx7pvCxA=";
               };
             };
             cargoBuildFlags = [ "--package" "gate-daemon" ];
@@ -462,8 +459,9 @@
             cargoLock = {
               lockFile = ./Cargo.lock;
               outputHashes = {
-                "instant-acme-0.8.0" = "sha256-0I3ot5mVLnimVz7RLBWpwIsZt0UpYz8jlNouLtePJ18=";
-                "yew-0.21.0" = "sha256-G1F3KyvMAViqypWxmFfdUsgZSERhXSXkLFSq8DGsD1M=";
+                "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
+                "instant-acme-0.8.0" = "sha256-J4plLJvpKUjoxj8DyI9rLGGt7y2HFt+3JO7eVrdirVI=";
+                "yew-0.21.0" = "sha256-ieVO9Crz61/hefKNCZlY1XSRObIy+8rqgZfEx7pvCxA=";
               };
             };
             buildFeatures = [ "server" ];
@@ -487,8 +485,9 @@
             cargoLock = {
               lockFile = ./Cargo.lock;
               outputHashes = {
-                "instant-acme-0.8.0" = "sha256-0I3ot5mVLnimVz7RLBWpwIsZt0UpYz8jlNouLtePJ18=";
-                "yew-0.21.0" = "sha256-G1F3KyvMAViqypWxmFfdUsgZSERhXSXkLFSq8DGsD1M=";
+                "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
+                "instant-acme-0.8.0" = "sha256-J4plLJvpKUjoxj8DyI9rLGGt7y2HFt+3JO7eVrdirVI=";
+                "yew-0.21.0" = "sha256-ieVO9Crz61/hefKNCZlY1XSRObIy+8rqgZfEx7pvCxA=";
               };
             };
             
@@ -559,7 +558,7 @@
             # cargo-tauri.hook will handle everything, including running
             # the beforeBuildCommand from tauri.conf.json
             
-            # On macOS, we need to ensure DMG creation has access to necessary tools
+            # Handle platform-specific setup
             preBuild = pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
               # Ensure DMG creation script can find tools
               export PATH="${pkgs.coreutils}/bin:${pkgs.findutils}/bin:${pkgs.gnutar}/bin:$PATH"
