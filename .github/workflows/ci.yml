@@ -106,10 +106,7 @@ jobs:
     
     # Build frontends and GUI
     - name: Build GUI
-      run: |
-        cd crates/frontend-daemon && trunk build --release
-        cd ../frontend-tauri && trunk build --release
-        cd ../gui && cargo tauri build
+      run: cd crates/gui && cargo tauri build
     
     - name: Find and prepare artifacts
       run: |
