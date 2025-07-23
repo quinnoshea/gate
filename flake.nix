@@ -210,7 +210,11 @@
         inherit rustToolchain customRustPlatform;
 
         # Package outputs
-        packages = {
+        packages = let
+          outputHashes = {
+                "catgrad-0.1.1" = "sha256-Im5fhCYqlX1LVtDLncWHIk1CPW+fnhncGYjbZofGRZQ=";
+                "yew-0.21.0" = "sha256-yLPQ5+qKSxFDilvz9dquK+tUvwLvdTHnx1Udx8Suvms=";
+              }; in {
           # Frontend packages - built separately for better caching
           gate-frontend-daemon = customRustPlatform.buildRustPackage {
             pname = "gate-frontend-daemon";
@@ -218,11 +222,7 @@
             src = frontendDaemonSource;
             cargoLock = {
               lockFile = ./Cargo.lock;
-              outputHashes = {
-                "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
-                "instant-acme-0.8.0" = "sha256-J4plLJvpKUjoxj8DyI9rLGGt7y2HFt+3JO7eVrdirVI=";
-                "yew-0.21.0" = "sha256-ieVO9Crz61/hefKNCZlY1XSRObIy+8rqgZfEx7pvCxA=";
-              };
+              inherit outputHashes;
             };
             
             nativeBuildInputs = with pkgs; [
@@ -262,11 +262,7 @@
             src = frontendTauriSource;
             cargoLock = {
               lockFile = ./Cargo.lock;
-              outputHashes = {
-                "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
-                "instant-acme-0.8.0" = "sha256-J4plLJvpKUjoxj8DyI9rLGGt7y2HFt+3JO7eVrdirVI=";
-                "yew-0.21.0" = "sha256-ieVO9Crz61/hefKNCZlY1XSRObIy+8rqgZfEx7pvCxA=";
-              };
+              inherit outputHashes;
             };
             
             nativeBuildInputs = with pkgs; [
@@ -306,11 +302,7 @@
             src = frontendRelaySource;
             cargoLock = {
               lockFile = ./Cargo.lock;
-              outputHashes = {
-                "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
-                "instant-acme-0.8.0" = "sha256-J4plLJvpKUjoxj8DyI9rLGGt7y2HFt+3JO7eVrdirVI=";
-                "yew-0.21.0" = "sha256-ieVO9Crz61/hefKNCZlY1XSRObIy+8rqgZfEx7pvCxA=";
-              };
+              inherit outputHashes;
             };
             
             nativeBuildInputs = with pkgs; [
@@ -351,11 +343,7 @@
             src = filteredSource;
             cargoLock = {
               lockFile = ./Cargo.lock;
-              outputHashes = {
-                "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
-                "instant-acme-0.8.0" = "sha256-J4plLJvpKUjoxj8DyI9rLGGt7y2HFt+3JO7eVrdirVI=";
-                "yew-0.21.0" = "sha256-ieVO9Crz61/hefKNCZlY1XSRObIy+8rqgZfEx7pvCxA=";
-              };
+              inherit outputHashes;
             };
             cargoBuildFlags = [ "--package" "gate-daemon" ];
             doCheck = false;
@@ -458,11 +446,7 @@
             src = filteredSource;
             cargoLock = {
               lockFile = ./Cargo.lock;
-              outputHashes = {
-                "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
-                "instant-acme-0.8.0" = "sha256-J4plLJvpKUjoxj8DyI9rLGGt7y2HFt+3JO7eVrdirVI=";
-                "yew-0.21.0" = "sha256-ieVO9Crz61/hefKNCZlY1XSRObIy+8rqgZfEx7pvCxA=";
-              };
+              inherit outputHashes;
             };
             buildFeatures = [ "server" ];
             cargoBuildFlags = [ "--package" "gate-tlsforward" ];
@@ -484,11 +468,7 @@
             
             cargoLock = {
               lockFile = ./Cargo.lock;
-              outputHashes = {
-                "catgrad-0.1.1" = "sha256-3f6lqwTEYKVU67Z7zokqco8794JzeFvesOsOihKr2Qo=";
-                "instant-acme-0.8.0" = "sha256-J4plLJvpKUjoxj8DyI9rLGGt7y2HFt+3JO7eVrdirVI=";
-                "yew-0.21.0" = "sha256-ieVO9Crz61/hefKNCZlY1XSRObIy+8rqgZfEx7pvCxA=";
-              };
+              inherit outputHashes;
             };
             
             nativeBuildInputs = with pkgs; [

@@ -265,3 +265,6 @@ release-minor: ## Create a minor release
 release-major: ## Create a major release
 	@echo "$(YELLOW)Creating major release...$(NC)"
 	cargo release major
+
+docker-ci:
+	act -j gui-build -P ubuntu-latest=catthehacker/ubuntu:act-latest --matrix os:ubuntu-latest
