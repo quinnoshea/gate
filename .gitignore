@@ -70,6 +70,7 @@ yarn-error.log*
 *.db-wal
 
 # Frontend build artifacts
+crates/gui/gen/
 crates/gui/resources/
 crates/frontend/dist/
 crates/frontend/dist

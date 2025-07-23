@@ -81,7 +81,7 @@ hyper = { workspace = true }
 hyper-util = { version = "0.1", features = ["server", "client", "tokio"], optional = true }
 
 # Let's Encrypt support
-instant-acme = { git = "https://github.com/djc/instant-acme.git", default-features = false, optional = true }
+instant-acme = { version = "0.8", default-features = false, optional = true }
 
 # P2P networking
 iroh = { workspace = true }

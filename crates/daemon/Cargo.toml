@@ -55,7 +55,7 @@ utoipa-scalar.workspace = true
 
 futures.workspace = true
 uuid.workspace = true
-catgrad-llm = { git = "https://github.com/hellas-ai/catgrad", branch = "grw/fix/remove-logging-init"}
+catgrad-llm = { git = "https://github.com/hellas-ai/catgrad"}
 
 [dev-dependencies]
 futures = "0.3"
