@@ -83,15 +83,14 @@ where
         + Send
         + Sync
         + 'static
-        + AsRef<Option<std::sync::Arc<WebAuthnService>>>
-        + AsRef<std::sync::Arc<AuthService>>,
+        + AsRef<Option<Arc<WebAuthnService>>>
+        + AsRef<Arc<AuthService>>,
 {
-    let maybe_webauthn_service: &Option<std::sync::Arc<WebAuthnService>> =
-        app_state.data.as_ref().as_ref();
+    let maybe_webauthn_service: &Option<Arc<WebAuthnService>> = app_state.data.as_ref().as_ref();
     let webauthn_service = maybe_webauthn_service
         .as_ref()
         .expect("WebAuthn service required");
-    let auth_service: &std::sync::Arc<AuthService> = app_state.data.as_ref().as_ref();
+    let auth_service: &Arc<AuthService> = app_state.data.as_ref().as_ref();
 
     let device_name = request.device_name.clone();
     let (passkey, credential_id, user_name) = webauthn_service
@@ -135,10 +134,9 @@ pub async fn auth_start<T>(
     State(app_state): State<AppState<T>>,
 ) -> Result<Json<AuthStartResponse>, HttpError>
 where
-    T: Clone + Send + Sync + 'static + AsRef<Option<std::sync::Arc<WebAuthnService>>>,
+    T: Clone + Send + Sync + 'static + AsRef<Option<Arc<WebAuthnService>>>,
 {
-    let maybe_webauthn_service: &Option<std::sync::Arc<WebAuthnService>> =
-        app_state.data.as_ref().as_ref();
+    let maybe_webauthn_service: &Option<Arc<WebAuthnService>> = app_state.data.as_ref().as_ref();
     let webauthn_service = maybe_webauthn_service
         .as_ref()
         .expect("WebAuthn service not initialized");
@@ -179,15 +177,14 @@ where
         + Send
         + Sync
         + 'static
-        + AsRef<Option<std::sync::Arc<WebAuthnService>>>
-        + AsRef<std::sync::Arc<AuthService>>,
+        + AsRef<Option<Arc<WebAuthnService>>>
+        + AsRef<Arc<AuthService>>,
 {
-    let maybe_webauthn_service: &Option<std::sync::Arc<WebAuthnService>> =
-        app_state.data.as_ref().as_ref();
+    let maybe_webauthn_service: &Option<Arc<WebAuthnService>> = app_state.data.as_ref().as_ref();
     let webauthn_service = maybe_webauthn_service
         .as_ref()
         .expect("WebAuthn service required");
-    let auth_service: &std::sync::Arc<AuthService> = app_state.data.as_ref().as_ref();
+    let auth_service: &Arc<AuthService> = app_state.data.as_ref().as_ref();
 
     let (credential_id, counter) = webauthn_service
         .complete_authentication(request.session_id, request.credential)
@@ -207,12 +204,7 @@ where
 
 /// Create the WebAuthn router
 pub fn router<
-    T: Send
-        + Sync
-        + Clone
-        + 'static
-        + AsRef<Option<std::sync::Arc<WebAuthnService>>>
-        + AsRef<std::sync::Arc<AuthService>>,
+    T: Send + Sync + Clone + 'static + AsRef<Option<Arc<WebAuthnService>>> + AsRef<Arc<AuthService>>,
 >() -> OpenApiRouter<AppState<T>> {
     OpenApiRouter::new()
         .routes(routes!(register_start))

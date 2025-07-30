@@ -103,7 +103,7 @@ impl ServerBuilder {
                     .await;
             }
         } else {
-            warn!("No upstreams configured");
+            debug!("No upstreams configured");
         }
 
         Ok(upstream_registry)
@@ -112,7 +112,7 @@ impl ServerBuilder {
     /// Build the inference service if configured
     async fn build_inference_service(&self) -> Option<Arc<dyn gate_core::InferenceBackend>> {
         if let Some(inference_config) = &self.settings.local_inference {
-            info!("Initializing local inference service");
+            debug!("Initializing local inference service");
 
             // Use the config as-is
             let config = inference_config.clone();

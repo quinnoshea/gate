@@ -318,12 +318,12 @@ pub mod fixtures {
 /// use the mockall-based MockStateBackend from the parent module instead.
 #[derive(Clone, Default)]
 pub struct InMemoryBackend {
-    users: std::sync::Arc<std::sync::Mutex<HashMap<String, User>>>,
-    api_keys: std::sync::Arc<std::sync::Mutex<HashMap<String, ApiKey>>>,
-    usage_records: std::sync::Arc<std::sync::Mutex<Vec<UsageRecord>>>,
-    providers: std::sync::Arc<std::sync::Mutex<HashMap<String, Provider>>>,
-    models: std::sync::Arc<std::sync::Mutex<HashMap<String, Model>>>,
-    organizations: std::sync::Arc<std::sync::Mutex<HashMap<String, Organization>>>,
+    users: Arc<std::sync::Mutex<HashMap<String, User>>>,
+    api_keys: Arc<std::sync::Mutex<HashMap<String, ApiKey>>>,
+    usage_records: Arc<std::sync::Mutex<Vec<UsageRecord>>>,
+    providers: Arc<std::sync::Mutex<HashMap<String, Provider>>>,
+    models: Arc<std::sync::Mutex<HashMap<String, Model>>>,
+    organizations: Arc<std::sync::Mutex<HashMap<String, Organization>>>,
 }
 
 #[async_trait]

@@ -82,12 +82,13 @@ async fn main() -> Result<()> {
         })?
     } else {
         // Fall back to default config
-        info!("Didn't find config file, using default settings");
+        warn!("Didn't find config file, using default settings");
         Settings::default()
     };
-    let settings_arc = Arc::new(settings.clone());
 
+    let settings_arc = Arc::new(settings.clone());
     debug!("Starting Gate Daemon with configuration: {:#?}", settings);
+
     // Create directories
     state_dir.create_directories().await?;
 

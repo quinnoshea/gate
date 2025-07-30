@@ -9,6 +9,7 @@ use axum::{
     response::Response,
 };
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 /// Represents an authenticated user
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,13 +70,13 @@ where
 /// Service-based authentication provider
 #[cfg(not(target_arch = "wasm32"))]
 pub struct ServiceAuthProvider {
-    auth_service: std::sync::Arc<crate::services::AuthService>,
+    auth_service: Arc<crate::services::AuthService>,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 impl ServiceAuthProvider {
     /// Create a new service-based auth provider
-    pub fn new(auth_service: std::sync::Arc<crate::services::AuthService>) -> Self {
+    pub fn new(auth_service: Arc<crate::services::AuthService>) -> Self {
         Self { auth_service }
     }
 }
@@ -119,18 +120,16 @@ impl AuthProvider for ServiceAuthProvider {
 #[async_trait]
 impl<T> AuthProvider for crate::AppState<T>
 where
-    T: AsRef<std::sync::Arc<crate::services::AuthService>> + Send + Sync,
+    T: AsRef<Arc<crate::services::AuthService>> + Send + Sync,
 {
     async fn authenticate(&self, parts: &Parts) -> Result<AuthenticatedUser, HttpError> {
-        let auth_service: &std::sync::Arc<crate::services::AuthService> =
-            self.data.as_ref().as_ref();
+        let auth_service: &Arc<crate::services::AuthService> = self.data.as_ref().as_ref();
         let service_provider = ServiceAuthProvider::new(auth_service.clone());
         service_provider.authenticate(parts).await
     }
 
     fn should_skip_auth(&self, path: &str) -> bool {
-        let auth_service: &std::sync::Arc<crate::services::AuthService> =
-            self.data.as_ref().as_ref();
+        let auth_service: &Arc<crate::services::AuthService> = self.data.as_ref().as_ref();
         let service_provider = ServiceAuthProvider::new(auth_service.clone());
         service_provider.should_skip_auth(path)
     }
