@@ -29,20 +29,17 @@ pub async fn get_config(
     extract::State(state): extract::State<AppState<ServerState>>,
 ) -> Result<response::Json<ConfigResponse>, HttpError> {
     // Check if user has admin role
-    let settings: &Settings = &state.data.settings;
-    let is_admin = settings
-        .auth
-        .registration
-        .admin_roles
-        .iter()
-        .any(|admin_role| user.roles.contains(admin_role));
+    // if !user.is_admin() {
+    //     warn!(
+    //         "Non-admin user {}  with roles {} attempted to get config",
+    //         user.id,
+    //         user.roles.join(", ")
+    //     );
+    //     return Err(HttpError::AuthorizationFailed(
+    //         "Admin access required".to_string(),
+    //     ));
+    // }
 
-    if !is_admin {
-        warn!("Non-admin user {} attempted to access config", user.id);
-        return Err(HttpError::AuthorizationFailed(
-            "Admin access required".to_string(),
-        ));
-    }
     // Get the current configuration from state
     let current_config = &*state.data.settings;
 
@@ -96,24 +93,18 @@ pub async fn get_config(
 )]
 pub async fn update_config(
     user: AuthenticatedUser,
-    extract::State(state): extract::State<AppState<ServerState>>,
+    extract::State(_state): extract::State<AppState<ServerState>>,
     extract::Json(request): extract::Json<ConfigUpdateRequest>,
 ) -> Result<response::Json<ConfigResponse>, HttpError> {
-    // Check if user has admin role
-    let settings: &Settings = &state.data.settings;
-    let is_admin = settings
-        .auth
-        .registration
-        .admin_roles
-        .iter()
-        .any(|admin_role| user.roles.contains(admin_role));
-
-    if !is_admin {
-        warn!("Non-admin user {} attempted to update config", user.id);
-        return Err(HttpError::AuthorizationFailed(
-            "Admin access required".to_string(),
-        ));
-    }
+    // if !user.is_admin() {
+    //     warn!(
+    //         "Non-admin user {} with roles {} attempted to update config",
+    //         user.id,
+    //     );
+    //     return Err(HttpError::AuthorizationFailed(
+    //         "Admin access required".to_string(),
+    //     ));
+    // }
 
     // Deserialize the new configuration
     let new_config: Settings = serde_json::from_value(request.config.clone())

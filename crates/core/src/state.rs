@@ -10,7 +10,7 @@ pub trait StateBackend: Send + Sync {
     async fn create_user(&self, user: &User) -> Result<()>;
     async fn update_user(&self, user: &User) -> Result<()>;
     async fn delete_user(&self, user_id: &str) -> Result<()>;
-    async fn list_users(&self, filter: Option<&str>) -> Result<Vec<User>>;
+    async fn list_users(&self) -> Result<Vec<User>>;
 
     // API key management
     async fn get_api_key(&self, key_hash: &str) -> Result<Option<ApiKey>>;

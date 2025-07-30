@@ -74,7 +74,7 @@ where
     #[instrument(name = "db.get_user_by_id", skip(self))]
     async fn get_user_by_id(&self, user_id: &str) -> Result<Option<User>> {
         let user = sqlx::query_as::<_, UserRow>(
-            "SELECT id, email, name, role, created_at, updated_at FROM users WHERE id = $1",
+            "SELECT id, email, name, created_at, updated_at FROM users WHERE id = $1",
         )
         .bind(user_id)
         .fetch_optional(&self.pool)
@@ -89,12 +89,11 @@ where
         let email = user.metadata.get("email").cloned();
 
         sqlx::query(
-            "INSERT INTO users (id, email, name, role, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)"
+            "INSERT INTO users (id, email, name, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)"
         )
         .bind(&user.id)
         .bind(email)
         .bind(&user.name)
-        .bind(&user.role)
         .bind(datetime_to_string(user.created_at))
         .bind(datetime_to_string(user.updated_at))
         .execute(&self.pool)
@@ -108,11 +107,10 @@ where
         let email = user.metadata.get("email").cloned();
 
         sqlx::query(
-            "UPDATE users SET email = $1, name = $2, role = $3, updated_at = $4 WHERE id = $5",
+            "UPDATE users SET email = $1, name = $2, updated_at = $3 WHERE id = $4",
         )
         .bind(email)
         .bind(&user.name)
-        .bind(&user.role)
         .bind(datetime_to_string(user.updated_at))
         .bind(&user.id)
         .execute(&self.pool)
@@ -134,21 +132,12 @@ where
     }
 
     #[instrument(name = "db.list_users", skip(self))]
-    async fn list_users(&self, filter: Option<&str>) -> Result<Vec<User>> {
-        let users = if let Some(role_filter) = filter {
-            sqlx::query_as::<_, UserRow>(
-                "SELECT id, email, name, role, created_at, updated_at FROM users WHERE role = $1 ORDER BY created_at DESC",
-            )
-            .bind(role_filter)
-            .fetch_all(&self.pool)
-            .await
-        } else {
-            sqlx::query_as::<_, UserRow>(
-                "SELECT id, email, name, role, created_at, updated_at FROM users ORDER BY created_at DESC",
-            )
-            .fetch_all(&self.pool)
-            .await
-        }
+    async fn list_users(&self) -> Result<Vec<User>> {
+        let users = sqlx::query_as::<_, UserRow>(
+            "SELECT id, email, name, created_at, updated_at FROM users ORDER BY created_at DESC",
+        )
+        .fetch_all(&self.pool)
+        .await
         .map_err(|e| Error::StateError(format!("Failed to list users: {e}")))?;
 
         Ok(users.into_iter().map(Into::into).collect())

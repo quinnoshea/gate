@@ -25,7 +25,6 @@ pub struct UserRow {
     pub id: String,
     pub email: Option<String>,
     pub name: Option<String>,
-    pub role: String,
     pub created_at: String, // ISO8601 format
     pub updated_at: String, // ISO8601 format
 }
@@ -97,7 +96,6 @@ impl From<UserRow> for User {
         User {
             id: row.id,
             name: row.name,
-            role: row.role,
             created_at: string_to_datetime(&row.created_at).unwrap_or_else(|_| Utc::now()),
             updated_at: string_to_datetime(&row.updated_at).unwrap_or_else(|_| Utc::now()),
             metadata,

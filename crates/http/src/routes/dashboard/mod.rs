@@ -17,7 +17,7 @@ where
         + Clone
         + 'static
         + AsRef<std::sync::Arc<crate::services::AuthService>>
-        + AsRef<std::sync::Arc<crate::services::WebAuthnService>>
+        + AsRef<Option<std::sync::Arc<crate::services::WebAuthnService>>>
         + AsRef<std::sync::Arc<crate::services::JwtService>>,
 {
     router

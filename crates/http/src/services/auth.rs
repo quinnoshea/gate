@@ -119,16 +119,12 @@ impl AuthService {
     pub fn validate_token(&self, token: &str) -> Result<AuthenticatedUser, HttpError> {
         let claims = self.jwt_service.validate_token(token)?;
 
-        // Get the user to retrieve their role
-        let user = futures::executor::block_on(self.state_backend.get_user_by_id(&claims.sub))
-            .map_err(|e| HttpError::InternalServerError(format!("Failed to get user: {e}")))?
-            .ok_or_else(|| HttpError::NotFound("User not found".to_string()))?;
+        // TODO: invalidation check
 
         Ok(AuthenticatedUser {
             id: claims.sub,
             name: claims.name,
-            email: None, // WebAuthn doesn't use email
-            roles: vec![user.role],
+            email: None,
             metadata: serde_json::json!({
                 "auth_method": "webauthn",
                 "issued_at": claims.iat,

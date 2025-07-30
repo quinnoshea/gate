@@ -16,7 +16,6 @@ pub struct AuthenticatedUser {
     pub id: String,
     pub name: Option<String>,
     pub email: Option<String>,
-    pub roles: Vec<String>,
     pub metadata: serde_json::Value,
 }
 

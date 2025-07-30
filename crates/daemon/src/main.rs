@@ -537,11 +537,13 @@ async fn main() -> Result<()> {
             }
         }
 
-        if !domains.is_empty() {
-            let email = settings.letsencrypt.email.clone().unwrap_or_else(|| {
-                warn!("No email configured for Let's Encrypt, using default");
-                "admin@example.com".to_string()
-            });
+        if !domains.is_empty() && settings.letsencrypt.email.is_some() {
+            let email = settings
+                .letsencrypt
+                .email
+                .as_ref()
+                .expect("is some")
+                .clone();
 
             info!("Requesting certificates for configured domains");
             for domain in &domains {

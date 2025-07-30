@@ -17,6 +17,13 @@ CREATE TABLE IF NOT EXISTS organizations (
     settings TEXT              -- JSON as text
 );
 
+CREATE TABLE IF NOT EXISTS grants (
+    user_id TEXT NOT NULL,    -- which user has the grant
+    permission TEXT NOT NULL, -- 'hellas/admin', 'hellas/read',
+    created_at TEXT NOT NULL,    -- ISO8601 format
+    PRIMARY KEY (user_id, permission)
+) WITHOUT ROWID;
+
 -- API Keys table
 CREATE TABLE IF NOT EXISTS api_keys (
     key_hash TEXT PRIMARY KEY,

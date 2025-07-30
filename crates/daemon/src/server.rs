@@ -48,14 +48,7 @@ impl ServerBuilder {
     /// Build the JWT service
     pub fn build_jwt_service(&self) -> Arc<JwtService> {
         let jwt_config = JwtConfig {
-            secret: self
-                .settings
-                .auth
-                .jwt
-                .secret
-                .clone()
-                .or_else(|| std::env::var("JWT_SECRET").ok())
-                .unwrap_or_else(|| "your-secret-key-change-this-in-production".to_string()),
+            secret: self.settings.auth.jwt.secret.clone(),
             expiration: chrono::Duration::hours(self.settings.auth.jwt.expiration_hours as i64),
             issuer: self.settings.auth.jwt.issuer.clone(),
         };
@@ -159,14 +152,6 @@ impl ServerBuilder {
         // Build inference service if configured
         let inference_backend = self.build_inference_service().await;
 
-        // Create a dummy request context for now (will be created per-request later)
-        let request_context = Arc::new(NativeRequestContext::new(
-            Default::default(),
-            "http://localhost".to_string(),
-            "GET".to_string(),
-            None,
-        ));
-
         let state = if self.settings.auth.webauthn.enabled {
             // Use WebAuthn configuration from settings
             let mut webauthn_config = WebAuthnConfig {
@@ -237,16 +222,15 @@ impl ServerBuilder {
             // Create server state with WebAuthn
             let server_state = ServerState {
                 auth_service,
-                webauthn_service,
+                webauthn_service: Some(webauthn_service),
                 jwt_service,
                 settings: self.settings_arc.clone(),
                 bootstrap_manager,
                 inference_service: inference_backend.clone(),
             };
 
-            let mut app_state =
-                AppState::new(request_context, self.state_backend.clone(), server_state)
-                    .with_upstream_registry(upstream_registry);
+            let mut app_state = AppState::new(self.state_backend.clone(), server_state)
+                .with_upstream_registry(upstream_registry);
 
             if let Some(backend) = inference_backend {
                 app_state = app_state.with_inference_backend(backend);
@@ -267,11 +251,11 @@ impl ServerBuilder {
             ));
 
             // Create minimal WebAuthn service (won't be used but needed for container)
-            let webauthn_config = WebAuthnConfig::default();
-            let webauthn_service = Arc::new(
-                WebAuthnService::new(webauthn_config, dummy_webauthn_backend.clone())
-                    .map_err(|e| anyhow::anyhow!("Failed to create WebAuthn service: {}", e))?,
-            );
+            // let webauthn_config = WebAuthnConfig::default();
+            // let webauthn_service = Arc::new(
+            //     WebAuthnService::new(webauthn_config, dummy_webauthn_backend.clone())
+            //         .map_err(|e| anyhow::anyhow!("Failed to create WebAuthn service: {}", e))?,
+            // );
 
             // Create bootstrap manager
             let bootstrap_manager = Arc::new(BootstrapTokenManager::new(dummy_webauthn_backend));
@@ -279,16 +263,15 @@ impl ServerBuilder {
             // Create server state with services
             let server_state = ServerState {
                 auth_service,
-                webauthn_service,
+                webauthn_service: None,
                 jwt_service,
                 settings: self.settings_arc.clone(),
                 bootstrap_manager,
                 inference_service: inference_backend.clone(),
             };
 
-            let mut app_state =
-                AppState::new(request_context, self.state_backend.clone(), server_state)
-                    .with_upstream_registry(upstream_registry);
+            let mut app_state = AppState::new(self.state_backend.clone(), server_state)
+                .with_upstream_registry(upstream_registry);
 
             if let Some(backend) = inference_backend {
                 app_state = app_state.with_inference_backend(backend);
@@ -302,7 +285,7 @@ impl ServerBuilder {
 
     /// Get the WebAuthn service for relay monitoring
     pub fn get_webauthn_service(state: &AppState<ServerState>) -> Arc<WebAuthnService> {
-        state.data.webauthn_service.clone()
+        state.data.webauthn_service.clone().expect("REASON")
     }
 
     /// Build the complete axum router with documentation

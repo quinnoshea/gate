@@ -14,7 +14,7 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct AppState<T = ()> {
     /// Request context for platform-specific operations
-    pub context: Arc<dyn RequestContext>,
+    // pub context: Arc<dyn RequestContext>,
     /// State backend for data persistence
     pub state_backend: Arc<dyn StateBackend>,
     /// WebAuthn backend for credential storage
@@ -33,12 +33,12 @@ pub struct AppState<T = ()> {
 impl<T> AppState<T> {
     /// Create a new AppState with the given components
     pub fn new(
-        context: Arc<dyn RequestContext>,
+        // context: Arc<dyn RequestContext>,
         state_backend: Arc<dyn StateBackend>,
         data: T,
     ) -> Self {
         Self {
-            context,
+            // context,
             state_backend,
             webauthn_backend: None,
             #[cfg(not(target_arch = "wasm32"))]
@@ -52,14 +52,14 @@ impl<T> AppState<T> {
     /// Create a new AppState with WebAuthn support
     #[cfg(not(target_arch = "wasm32"))]
     pub fn with_webauthn(
-        context: Arc<dyn RequestContext>,
+        // context: Arc<dyn RequestContext>,
         state_backend: Arc<dyn StateBackend>,
         webauthn_backend: Arc<dyn WebAuthnBackend>,
         webauthn_state: Arc<WebAuthnState>,
         data: T,
     ) -> Self {
         Self {
-            context,
+            // context,
             state_backend,
             webauthn_backend: Some(webauthn_backend),
             webauthn_state: Some(webauthn_state),
@@ -88,7 +88,7 @@ impl Default for AppState<()> {
         use gate_core::tests::{context::MockRequestContext, state::InMemoryBackend};
 
         Self::new(
-            Arc::new(MockRequestContext::default()),
+            // Arc::new(MockRequestContext::default()),
             Arc::new(InMemoryBackend::default()),
             (),
         )

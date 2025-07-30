@@ -3,7 +3,8 @@
 use crate::bootstrap::BootstrapTokenManager;
 use crate::config::Settings;
 use axum::{extract::State, response::Json};
-use gate_core::BootstrapTokenValidator;
+use chrono::{DateTime, Utc};
+use gate_core::{BootstrapTokenValidator, User};
 use gate_http::{
     error::HttpError,
     middleware::auth::AuthenticatedUser,
@@ -50,6 +51,25 @@ where
     })))
 }
 
+#[derive(serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
+pub struct CurrentUser {
+    pub id: String,
+    pub name: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<User> for CurrentUser {
+    fn from(user: User) -> Self {
+        Self {
+            id: user.id,
+            name: user.name,
+            created_at: user.created_at,
+            updated_at: user.updated_at,
+        }
+    }
+}
+
 /// Get current user information
 #[utoipa::path(
     get,
@@ -57,7 +77,7 @@ where
     operation_id = "get_current_user",
     description = "Get current user information",
     responses(
-        (status = 200, description = "User information", body = serde_json::Value),
+        (status = 200, description = "User information", body = CurrentUser),
         (status = 401, description = "Unauthorized")
     ),
     security(
@@ -67,9 +87,9 @@ where
 async fn get_current_user<T>(
     State(app_state): State<AppState<T>>,
     user: AuthenticatedUser,
-) -> Result<Json<serde_json::Value>, HttpError>
+) -> Result<Json<CurrentUser>, HttpError>
 where
-    T: AsRef<Arc<WebAuthnService>>
+    T: AsRef<Option<Arc<WebAuthnService>>>
         + AsRef<Arc<AuthService>>
         + AsRef<Arc<Settings>>
         + AsRef<Arc<BootstrapTokenManager>>,
@@ -82,13 +102,7 @@ where
         .map_err(|e| HttpError::InternalServerError(format!("Failed to get user: {e}")))?
         .ok_or_else(|| HttpError::AuthorizationFailed("User not found".to_string()))?;
 
-    Ok(Json(serde_json::json!({
-        "id": user_data.id,
-        "name": user_data.name,
-        "role": user_data.role,
-        "created_at": user_data.created_at,
-        "updated_at": user_data.updated_at,
-    })))
+    Ok(Json(user_data.into()))
 }
 
 /// Add custom auth routes
@@ -98,7 +112,7 @@ where
         + Send
         + Sync
         + 'static
-        + AsRef<Arc<WebAuthnService>>
+        + AsRef<Option<Arc<WebAuthnService>>>
         + AsRef<Arc<AuthService>>
         + AsRef<Arc<Settings>>
         + AsRef<Arc<BootstrapTokenManager>>,

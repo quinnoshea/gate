@@ -32,16 +32,16 @@ pub struct JwtConfig {
     pub issuer: String,
 }
 
-impl Default for JwtConfig {
-    fn default() -> Self {
-        Self {
-            secret: std::env::var("JWT_SECRET")
-                .unwrap_or_else(|_| "your-secret-key-change-this-in-production".to_string()),
-            expiration: Duration::hours(24),
-            issuer: "gate-server".to_string(),
-        }
-    }
-}
+// impl Default for JwtConfig {
+//     fn default() -> Self {
+//         Self {
+//             secret: std::env::var("JWT_SECRET")
+//                 .unwrap_or_else(|_| "your-secret-key-change-this-in-production".to_string()),
+//             expiration: Duration::hours(24),
+//             issuer: "gate-server".to_string(),
+//         }
+//     }
+// }
 
 /// JWT service for token operations
 pub struct JwtService {
@@ -64,7 +64,11 @@ impl JwtService {
     }
 
     /// Generate a JWT token for a user
-    pub fn generate_token(&self, user_id: &str, name: Option<&str>) -> Result<String, HttpError> {
+    pub fn generate_token(
+        &self,
+        user_id: &str,
+        name: Option<&str>,
+    ) -> Result<String, HttpError> {
         let now = Utc::now();
         let expiration = now + self.config.expiration;
 
@@ -129,7 +133,9 @@ mod tests {
         let name = Some("Test User");
 
         // Generate token
-        let token = service.generate_token(user_id, name).unwrap();
+        let token = service
+            .generate_token(user_id, name, vec!["admin".to_string()])
+            .unwrap();
         assert!(!token.is_empty());
 
         // Validate token
@@ -152,6 +158,7 @@ mod tests {
             exp: expired_time.timestamp(),
             iat: expired_time.timestamp(),
             iss: service.config.issuer.clone(),
+            roles: vec!["user".to_string()],
         };
 
         let header = Header::new(Algorithm::HS256);

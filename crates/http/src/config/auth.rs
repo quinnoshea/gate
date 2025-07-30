@@ -55,83 +55,11 @@ pub struct SessionConfig {
     pub cleanup_interval_seconds: u64,
 }
 
-impl Default for AuthConfig {
-    fn default() -> Self {
-        Self {
-            #[cfg(not(target_arch = "wasm32"))]
-            jwt: crate::services::jwt::JwtConfig::default().into(),
-            #[cfg(target_arch = "wasm32")]
-            jwt: JwtConfigData {
-                secret: "your-secret-key-change-this-in-production".to_string(),
-                expiration_seconds: 86400, // 24 hours
-                issuer: "gate-server".to_string(),
-            },
-            session: SessionConfig::default(),
-        }
-    }
-}
-
 impl Default for SessionConfig {
     fn default() -> Self {
         Self {
             timeout_seconds: 86400,         // 24 hours
             cleanup_interval_seconds: 3600, // 1 hour
         }
-    }
-}
-
-impl AuthConfig {
-    /// Create auth config from environment variables
-    pub fn from_env() -> Self {
-        let mut config = Self::default();
-
-        // JWT configuration
-        if let Ok(secret) = std::env::var("JWT_SECRET") {
-            config.jwt.secret = secret;
-        }
-        if let Ok(hours) = std::env::var("JWT_EXPIRATION_HOURS")
-            && let Ok(hours) = hours.parse::<i64>()
-        {
-            config.jwt.expiration_seconds = hours * 3600;
-        }
-        if let Ok(issuer) = std::env::var("JWT_ISSUER") {
-            config.jwt.issuer = issuer;
-        }
-
-        // Session configuration
-        if let Ok(timeout) = std::env::var("SESSION_TIMEOUT_SECONDS")
-            && let Ok(timeout) = timeout.parse::<u64>()
-        {
-            config.session.timeout_seconds = timeout;
-        }
-
-        config
-    }
-
-    /// Create development configuration
-    pub fn development() -> Self {
-        Self {
-            jwt: JwtConfigData {
-                secret: "development-secret-key".to_string(),
-                expiration_seconds: 24 * 3600,
-                issuer: "gate-dev".to_string(),
-            },
-            session: SessionConfig {
-                timeout_seconds: 86400,
-                cleanup_interval_seconds: 3600,
-            },
-        }
-    }
-
-    /// Create production configuration
-    pub fn production() -> Self {
-        let config = Self::from_env();
-
-        // Validate production requirements
-        if config.jwt.secret == "your-secret-key-change-this-in-production" {
-            panic!("JWT_SECRET must be set in production");
-        }
-
-        config
     }
 }
