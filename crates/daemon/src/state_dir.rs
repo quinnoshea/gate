@@ -62,20 +62,6 @@ impl StateDir {
         }
     }
 
-    /// Get the cache directory
-    pub fn cache_dir(&self) -> PathBuf {
-        if let Some(override_dir) = &self.override_dir {
-            return override_dir.join("cache");
-        }
-
-        if let Some(project_dirs) = &self.project_dirs {
-            project_dirs.cache_dir().to_path_buf()
-        } else {
-            // Fallback to current directory
-            PathBuf::from("./cache")
-        }
-    }
-
     /// Get the directory for storing keys
     pub fn keys_dir(&self) -> PathBuf {
         self.data_dir().join("keys")
@@ -106,7 +92,6 @@ impl StateDir {
         let dirs = vec![
             self.config_dir(),
             self.data_dir(),
-            self.cache_dir(),
             self.keys_dir(),
             self.certificates_dir(),
             self.acme_dir(),
@@ -122,7 +107,6 @@ impl StateDir {
         debug!("Using state directories:");
         debug!("  Config: {}", self.config_dir().display());
         debug!("  Data: {}", self.data_dir().display());
-        debug!("  Cache: {}", self.cache_dir().display());
 
         Ok(())
     }
@@ -146,7 +130,6 @@ mod tests {
 
         assert_eq!(state_dir.config_dir(), temp_dir.path().join("config"));
         assert_eq!(state_dir.data_dir(), temp_dir.path().join("data"));
-        assert_eq!(state_dir.cache_dir(), temp_dir.path().join("cache"));
     }
 
     #[tokio::test]
@@ -158,7 +141,6 @@ mod tests {
 
         assert!(state_dir.config_dir().exists());
         assert!(state_dir.data_dir().exists());
-        assert!(state_dir.cache_dir().exists());
         assert!(state_dir.keys_dir().exists());
         assert!(state_dir.certificates_dir().exists());
         assert!(state_dir.acme_dir().exists());

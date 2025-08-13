@@ -1,108 +1,33 @@
-use crate::utils::is_tauri;
 use gate_frontend_common::{
+    auth::use_auth,
     components::Spinner as LoadingSpinner,
     hooks::{use_webauthn, WebAuthnState},
 };
-use wasm_bindgen::prelude::*;
 use yew::prelude::*;
 
-/// Fetch bootstrap token from Tauri API
-async fn fetch_bootstrap_token() -> Result<Option<String>, String> {
-    // Only available in Tauri context
-    if !is_tauri() {
-        return Ok(None);
-    }
-
-    // Call the Tauri command directly
-    #[wasm_bindgen(inline_js = "
-    export async function call_get_bootstrap_token() {
-        try {
-            if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {
-                return await window.__TAURI_INTERNALS__.invoke('get_bootstrap_token');
-            } else if (window.__TAURI__ && window.__TAURI__.invoke) {
-                return await window.__TAURI__.invoke('get_bootstrap_token');
-            } else if (window.__TAURI__ && window.__TAURI__.tauri && window.__TAURI__.tauri.invoke) {
-                return await window.__TAURI__.tauri.invoke('get_bootstrap_token');
-            }
-            return null;
-        } catch (e) {
-            console.error('Failed to get bootstrap token:', e);
-            throw e;
-        }
-    }
-    ")]
-    extern "C" {
-        #[wasm_bindgen(catch)]
-        async fn call_get_bootstrap_token() -> Result<JsValue, JsValue>;
-    }
-
-    match call_get_bootstrap_token().await {
-        Ok(result) => {
-            if result.is_null() || result.is_undefined() {
-                Ok(None)
-            } else if result.is_string() {
-                Ok(Some(result.as_string().unwrap()))
-            } else {
-                // Try to parse as JSON
-                match serde_wasm_bindgen::from_value::<Option<String>>(result) {
-                    Ok(token) => Ok(token),
-                    Err(_) => Err("Invalid response format".to_string()),
-                }
-            }
-        }
-        Err(e) => Err(format!("Failed to get bootstrap token: {e:?}")),
-    }
+#[derive(Properties, PartialEq)]
+pub struct OnboardingAuthProps {
+    pub bootstrap_token: String,
 }
 
 #[function_component(OnboardingAuth)]
-pub fn onboarding_auth() -> Html {
+pub fn onboarding_auth(props: &OnboardingAuthProps) -> Html {
     let webauthn = use_webauthn();
+    let auth = use_auth();
     let name = use_state(String::new);
-    let bootstrap_token = use_state(|| None::<String>);
-    let is_loading_token = use_state(|| true);
-    let token_error = use_state(|| None::<String>);
+    let bootstrap_token = props.bootstrap_token.clone();
 
-    // Fetch bootstrap token on mount - check URL params first, then Tauri
-    {
-        let bootstrap_token = bootstrap_token.clone();
-        let is_loading_token = is_loading_token.clone();
-        let token_error = token_error.clone();
-
-        use_effect_with((), move |_| {
-            // First, check URL query parameters
-            if let Some(window) = web_sys::window() {
-                if let Ok(location) = window.location().search() {
-                    let params = web_sys::UrlSearchParams::new_with_str(&location).ok();
-                    if let Some(params) = params {
-                        if let Some(token) = params.get("bootstrap_token") {
-                            bootstrap_token.set(Some(token));
-                            is_loading_token.set(false);
-                            return;
-                        }
-                    }
-                }
+    // Redirect to home if user is authenticated
+    use_effect_with(auth.auth_state.clone(), {
+        move |auth_state| {
+            if auth_state.is_some() {
+                // User is authenticated, redirect to home
+                let window = web_sys::window().unwrap();
+                let location = window.location();
+                location.set_href("/").ok();
             }
-
-            // If not in URL and we're in Tauri context, try Tauri API
-            if is_tauri() {
-                wasm_bindgen_futures::spawn_local(async move {
-                    match fetch_bootstrap_token().await {
-                        Ok(token) => {
-                            bootstrap_token.set(token);
-                            is_loading_token.set(false);
-                        }
-                        Err(e) => {
-                            token_error.set(Some(e));
-                            is_loading_token.set(false);
-                        }
-                    }
-                });
-            } else {
-                // Not in Tauri and no token in URL - shouldn't show onboarding
-                is_loading_token.set(false);
-            }
-        });
-    }
+        }
+    });
 
     // Handle input changes
     let on_name_input = {
@@ -120,56 +45,13 @@ pub fn onboarding_auth() -> Html {
         let bootstrap_token = bootstrap_token.clone();
         Callback::from(move |_| {
             let name_value = (*name).clone();
+            web_sys::console::log_1(&format!("on_register called, name: '{name_value}'").into());
             if !name_value.is_empty() {
-                webauthn.register(name_value, None, (*bootstrap_token).clone());
+                web_sys::console::log_1(&"Calling webauthn.register".into());
+                webauthn.register(name_value, None, Some(bootstrap_token.clone()));
             }
         })
     };
-
-    // Loading bootstrap token
-    if *is_loading_token {
-        return html! {
-            <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900">
-                <div class="text-center">
-                    <LoadingSpinner text={Some("Initializing setup...".to_string())} />
-                </div>
-            </div>
-        };
-    }
-
-    // Token error
-    if let Some(error) = &*token_error {
-        return html! {
-            <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900">
-                <div class="max-w-md w-full p-8">
-                    <div class="bg-red-500/20 border border-red-500/30 rounded-lg p-6 text-center">
-                        <h2 class="text-xl font-bold text-white mb-2">{"Setup Error"}</h2>
-                        <p class="text-red-200">{error}</p>
-                        <p class="text-white/70 mt-4 text-sm">
-                            {"Please restart the application and try again."}
-                        </p>
-                    </div>
-                </div>
-            </div>
-        };
-    }
-
-    // No bootstrap token available
-    if bootstrap_token.is_none() {
-        return html! {
-            <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900">
-                <div class="max-w-md w-full p-8">
-                    <div class="bg-yellow-500/20 border border-yellow-500/30 rounded-lg p-6 text-center">
-                        <h2 class="text-xl font-bold text-white mb-2">{"Already Configured"}</h2>
-                        <p class="text-yellow-200">
-                            {"This instance has already been configured. "}
-                            {"Please use your existing credentials to log in."}
-                        </p>
-                    </div>
-                </div>
-            </div>
-        };
-    }
 
     // Main onboarding UI
     html! {
@@ -219,6 +101,26 @@ fn registration_form(
     on_name_input: &Callback<InputEvent>,
     on_register: &Callback<MouseEvent>,
 ) -> Html {
+    // Simple keyboard handler directly on the div
+    let handle_keydown = {
+        let name = name.clone();
+        let on_register = on_register.clone();
+        Callback::from(move |e: KeyboardEvent| {
+            web_sys::console::log_1(
+                &format!("Keydown event: key='{}', code='{}'", e.key(), e.code()).into(),
+            );
+            if e.key() == "Enter" && !(*name).is_empty() {
+                web_sys::console::log_1(
+                    &"Enter pressed with non-empty name, triggering register".into(),
+                );
+                e.prevent_default();
+                // Just emit a dummy mouse event to trigger the registration
+                let event = web_sys::MouseEvent::new("click").unwrap();
+                on_register.emit(event);
+            }
+        })
+    };
+
     html! {
         <div class="space-y-4">
             <div>
@@ -231,6 +133,7 @@ fn registration_form(
                     placeholder="Enter your name"
                     value={(**name).clone()}
                     oninput={on_name_input}
+                    onkeydown={handle_keydown}
                 />
                 <p class="text-white/50 text-xs mt-2">
                     {"This will be displayed when you log in"}

@@ -1,8 +1,8 @@
 //! Dashboard API routes
 
-use utoipa_axum::router::OpenApiRouter;
-
 use crate::AppState;
+use std::sync::Arc;
+use utoipa_axum::router::OpenApiRouter;
 
 pub mod api_keys;
 #[cfg(not(target_arch = "wasm32"))]
@@ -16,9 +16,9 @@ where
         + Sync
         + Clone
         + 'static
-        + AsRef<std::sync::Arc<crate::services::AuthService>>
-        + AsRef<std::sync::Arc<crate::services::WebAuthnService>>
-        + AsRef<std::sync::Arc<crate::services::JwtService>>,
+        + AsRef<Arc<crate::services::AuthService>>
+        + AsRef<Option<Arc<crate::services::WebAuthnService>>>
+        + AsRef<Arc<crate::services::JwtService>>,
 {
     router
         .merge(api_keys::router::<T>())

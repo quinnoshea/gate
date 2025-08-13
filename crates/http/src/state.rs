@@ -3,7 +3,7 @@
 use crate::forwarding::UpstreamRegistry;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::middleware::webauthn::WebAuthnState;
-use gate_core::{InferenceBackend, RequestContext, StateBackend, WebAuthnBackend};
+use gate_core::{InferenceBackend, StateBackend, WebAuthnBackend};
 use std::sync::Arc;
 
 /// Shared application state
@@ -13,8 +13,6 @@ use std::sync::Arc;
 /// the use of a generic type parameter.
 #[derive(Clone)]
 pub struct AppState<T = ()> {
-    /// Request context for platform-specific operations
-    pub context: Arc<dyn RequestContext>,
     /// State backend for data persistence
     pub state_backend: Arc<dyn StateBackend>,
     /// WebAuthn backend for credential storage
@@ -33,12 +31,12 @@ pub struct AppState<T = ()> {
 impl<T> AppState<T> {
     /// Create a new AppState with the given components
     pub fn new(
-        context: Arc<dyn RequestContext>,
+        // context: Arc<dyn RequestContext>,
         state_backend: Arc<dyn StateBackend>,
         data: T,
     ) -> Self {
         Self {
-            context,
+            // context,
             state_backend,
             webauthn_backend: None,
             #[cfg(not(target_arch = "wasm32"))]
@@ -52,14 +50,14 @@ impl<T> AppState<T> {
     /// Create a new AppState with WebAuthn support
     #[cfg(not(target_arch = "wasm32"))]
     pub fn with_webauthn(
-        context: Arc<dyn RequestContext>,
+        // context: Arc<dyn RequestContext>,
         state_backend: Arc<dyn StateBackend>,
         webauthn_backend: Arc<dyn WebAuthnBackend>,
         webauthn_state: Arc<WebAuthnState>,
         data: T,
     ) -> Self {
         Self {
-            context,
+            // context,
             state_backend,
             webauthn_backend: Some(webauthn_backend),
             webauthn_state: Some(webauthn_state),
@@ -79,18 +77,5 @@ impl<T> AppState<T> {
     pub fn with_inference_backend(mut self, backend: Arc<dyn InferenceBackend>) -> Self {
         self.inference_backend = Some(backend);
         self
-    }
-}
-
-#[cfg(test)]
-impl Default for AppState<()> {
-    fn default() -> Self {
-        use gate_core::tests::{context::MockRequestContext, state::InMemoryBackend};
-
-        Self::new(
-            Arc::new(MockRequestContext::default()),
-            Arc::new(InMemoryBackend::default()),
-            (),
-        )
     }
 }

@@ -7,7 +7,6 @@ use std::collections::HashMap;
 pub struct User {
     pub id: String,
     pub name: Option<String>,
-    pub role: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub metadata: HashMap<String, String>,

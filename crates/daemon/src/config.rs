@@ -10,7 +10,7 @@ fn default_host() -> String {
 }
 
 fn default_port() -> u16 {
-    3000
+    31145
 }
 
 fn default_true() -> bool {
@@ -30,7 +30,7 @@ fn default_rp_name() -> String {
 }
 
 fn default_rp_origin() -> String {
-    "http://localhost:3000".to_string()
+    format!("http://localhost:{}", default_port())
 }
 
 fn default_session_timeout() -> u64 {
@@ -43,6 +43,20 @@ fn default_timeout() -> u64 {
 
 fn default_jwt_issuer() -> String {
     "gate-daemon".to_string()
+}
+
+fn generate_random_secret() -> String {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let secret: String = (0..32)
+        .map(|_| rng.sample(rand::distributions::Alphanumeric) as char)
+        .collect();
+    secret
+}
+
+/// Default JWT secret, read from environment variable or generated if not set
+fn default_jwt_secret() -> String {
+    std::env::var("JWT_SECRET").unwrap_or_else(|_| generate_random_secret())
 }
 
 fn default_jwt_expiration_hours() -> u64 {
@@ -76,18 +90,6 @@ fn default_local_inference() -> Option<LocalInferenceConfig> {
         default_temperature: 0.7,
         default_max_tokens: 1024,
     })
-}
-
-fn default_user_role() -> String {
-    "user".to_string()
-}
-
-fn default_admin_roles() -> Vec<String> {
-    vec!["admin".to_string()]
-}
-
-fn default_bootstrap_role() -> String {
-    "admin".to_string()
 }
 
 fn default_tlsforward_addresses() -> Vec<String> {
@@ -142,6 +144,7 @@ pub struct ServerConfig {
     #[serde(default)]
     pub metrics_port: Option<u16>,
 }
+
 impl Default for ServerConfig {
     fn default() -> Self {
         serde_json::from_value(json!({})).expect("Default settings should always be valid")
@@ -238,9 +241,9 @@ pub struct JwtConfig {
     /// JWT issuer
     #[serde(default = "default_jwt_issuer")]
     pub issuer: String,
-    /// JWT secret (read from JWT_SECRET env var if not set)
-    #[serde(skip_serializing)]
-    pub secret: Option<String>,
+    /// JWT secret (read from JWT_SECRET env var or generate)
+    #[serde(default = "default_jwt_secret")]
+    pub secret: String,
     /// Token expiration in hours
     #[serde(default = "default_jwt_expiration_hours")]
     pub expiration_hours: u64,
@@ -258,15 +261,6 @@ pub struct RegistrationConfig {
     /// Allow open registration after bootstrap
     #[serde(default = "default_false")]
     pub allow_open_registration: bool,
-    /// Default role for new users
-    #[serde(default = "default_user_role")]
-    pub default_user_role: String,
-    /// Admin roles that have elevated privileges
-    #[serde(default = "default_admin_roles")]
-    pub admin_roles: Vec<String>,
-    /// Bootstrap admin role (role assigned to first user)
-    #[serde(default = "default_bootstrap_role")]
-    pub bootstrap_admin_role: String,
 }
 
 impl Default for RegistrationConfig {
@@ -391,5 +385,37 @@ impl Settings {
 
         let config = builder.build()?;
         config.try_deserialize()
+    }
+
+    /// Configuration preset optimized for GUI mode
+    pub fn gui_preset() -> Self {
+        let mut settings = Self {
+            local_inference: Some(LocalInferenceConfig {
+                enabled: true,
+                max_concurrent_inferences: 1,
+                default_temperature: 0.7,
+                default_max_tokens: 1024,
+            }),
+            ..Default::default()
+        };
+
+        // Set appropriate server defaults for GUI
+        settings.server.host = "localhost".to_string();
+        settings.server.port = default_port();
+
+        // Configure WebAuthn for localhost (sovereign local identity)
+        settings.auth.webauthn = WebAuthnConfig {
+            enabled: true,
+            rp_id: "localhost".to_string(),
+            rp_name: "Gate Local Node".to_string(),
+            rp_origin: format!("http://localhost:{}", settings.server.port),
+            allowed_origins: vec![format!("http://localhost:{}", settings.server.port)],
+            allow_subdomains: false,
+            allow_tlsforward_origins: false, // Relay passkeys are separate
+            require_user_verification: false,
+            session_timeout_seconds: 86400, // 24 hours
+        };
+
+        settings
     }
 }

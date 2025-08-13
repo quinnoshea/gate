@@ -28,21 +28,6 @@ pub struct WebAuthnConfig {
     pub session_timeout_seconds: u64,
 }
 
-impl Default for WebAuthnConfig {
-    fn default() -> Self {
-        Self {
-            rp_id: "localhost".to_string(),
-            rp_name: "Gate Self-Hosted".to_string(),
-            rp_origin: "http://localhost:8081".to_string(),
-            allowed_origins: vec![],
-            allow_tlsforward_origins: true,
-            allow_subdomains: false,
-            require_user_verification: false,
-            session_timeout_seconds: 86400, // 24 hours
-        }
-    }
-}
-
 /// Session data for ongoing WebAuthn operations
 #[derive(Debug, Clone)]
 pub struct WebAuthnSession {

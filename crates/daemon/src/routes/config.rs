@@ -1,14 +1,18 @@
 //! Configuration management routes
 
+use crate::permissions::LocalContext;
 use crate::{ServerState, Settings, StateDir};
 use axum::{extract, response, routing};
+use gate_core::access::{
+    Action, ObjectId, ObjectIdentity, ObjectKind, Permissions, SubjectIdentity, TargetNamespace,
+};
 use gate_http::{
     AppState,
     error::HttpError,
-    middleware::auth::AuthenticatedUser,
+    services::HttpIdentity,
     types::{ConfigResponse, ConfigUpdateRequest},
 };
-use tracing::{info, warn};
+use tracing::info;
 
 /// Get the full configuration
 #[utoipa::path(
@@ -25,24 +29,31 @@ use tracing::{info, warn};
     tag = "config"
 )]
 pub async fn get_config(
-    user: AuthenticatedUser,
+    identity: HttpIdentity,
     extract::State(state): extract::State<AppState<ServerState>>,
 ) -> Result<response::Json<ConfigResponse>, HttpError> {
-    // Check if user has admin role
-    let settings: &Settings = &state.data.settings;
-    let is_admin = settings
-        .auth
-        .registration
-        .admin_roles
-        .iter()
-        .any(|admin_role| user.roles.contains(admin_role));
+    // Check permission to read configuration
+    let permission_manager = &state.data.permission_manager;
+    let config_object = ObjectIdentity {
+        namespace: TargetNamespace::System,
+        kind: ObjectKind::Config,
+        id: ObjectId::new("*"),
+    };
 
-    if !is_admin {
-        warn!("Non-admin user {} attempted to access config", user.id);
+    let local_ctx = LocalContext::from_http_identity(&identity, state.state_backend.as_ref()).await;
+    let local_identity =
+        SubjectIdentity::new(identity.id.clone(), identity.source.clone(), local_ctx);
+
+    if permission_manager
+        .check(&local_identity, Action::Read, &config_object)
+        .await
+        .is_err()
+    {
         return Err(HttpError::AuthorizationFailed(
-            "Admin access required".to_string(),
+            "Permission denied: cannot read configuration".to_string(),
         ));
     }
+
     // Get the current configuration from state
     let current_config = &*state.data.settings;
 
@@ -95,23 +106,33 @@ pub async fn get_config(
     tag = "config"
 )]
 pub async fn update_config(
-    user: AuthenticatedUser,
-    extract::State(state): extract::State<AppState<ServerState>>,
+    identity: HttpIdentity,
+    extract::State(_state): extract::State<AppState<ServerState>>,
     extract::Json(request): extract::Json<ConfigUpdateRequest>,
 ) -> Result<response::Json<ConfigResponse>, HttpError> {
-    // Check if user has admin role
-    let settings: &Settings = &state.data.settings;
-    let is_admin = settings
-        .auth
-        .registration
-        .admin_roles
-        .iter()
-        .any(|admin_role| user.roles.contains(admin_role));
+    // Check permission to write configuration
+    let permission_manager = &_state.data.permission_manager;
+    let config_object = ObjectIdentity {
+        namespace: TargetNamespace::System,
+        kind: ObjectKind::Config,
+        id: ObjectId::new("*"),
+    };
 
-    if !is_admin {
-        warn!("Non-admin user {} attempted to update config", user.id);
+    let local_ctx = crate::permissions::LocalContext::from_http_identity(
+        &identity,
+        _state.state_backend.as_ref(),
+    )
+    .await;
+    let local_identity =
+        SubjectIdentity::new(identity.id.clone(), identity.source.clone(), local_ctx);
+
+    if permission_manager
+        .check(&local_identity, Action::Write, &config_object)
+        .await
+        .is_err()
+    {
         return Err(HttpError::AuthorizationFailed(
-            "Admin access required".to_string(),
+            "Permission denied: cannot update configuration".to_string(),
         ));
     }
 

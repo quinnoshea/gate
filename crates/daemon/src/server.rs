@@ -1,8 +1,9 @@
 //! Server setup and configuration module
 
+use crate::ServerState;
 use crate::bootstrap::BootstrapTokenManager;
 use crate::config::Settings;
-use crate::{NativeRequestContext, ServerState};
+use crate::permissions::LocalPermissionManager;
 use anyhow::Result;
 use axum;
 use gate_core::{StateBackend, WebAuthnBackend};
@@ -27,6 +28,7 @@ pub struct ServerBuilder {
     state_backend: Arc<dyn StateBackend>,
     webauthn_backend: Arc<dyn WebAuthnBackend>,
     settings_arc: Arc<Settings>,
+    bootstrap_manager: Option<Arc<BootstrapTokenManager>>,
 }
 
 impl ServerBuilder {
@@ -42,20 +44,20 @@ impl ServerBuilder {
             state_backend,
             webauthn_backend,
             settings_arc,
+            bootstrap_manager: None,
         }
+    }
+
+    /// Set the bootstrap manager
+    pub fn with_bootstrap_manager(mut self, bootstrap_manager: Arc<BootstrapTokenManager>) -> Self {
+        self.bootstrap_manager = Some(bootstrap_manager);
+        self
     }
 
     /// Build the JWT service
     pub fn build_jwt_service(&self) -> Arc<JwtService> {
         let jwt_config = JwtConfig {
-            secret: self
-                .settings
-                .auth
-                .jwt
-                .secret
-                .clone()
-                .or_else(|| std::env::var("JWT_SECRET").ok())
-                .unwrap_or_else(|| "your-secret-key-change-this-in-production".to_string()),
+            secret: self.settings.auth.jwt.secret.clone(),
             expiration: chrono::Duration::hours(self.settings.auth.jwt.expiration_hours as i64),
             issuer: self.settings.auth.jwt.issuer.clone(),
         };
@@ -110,7 +112,7 @@ impl ServerBuilder {
                     .await;
             }
         } else {
-            warn!("No upstreams configured");
+            debug!("No upstreams configured");
         }
 
         Ok(upstream_registry)
@@ -119,7 +121,7 @@ impl ServerBuilder {
     /// Build the inference service if configured
     async fn build_inference_service(&self) -> Option<Arc<dyn gate_core::InferenceBackend>> {
         if let Some(inference_config) = &self.settings.local_inference {
-            info!("Initializing local inference service");
+            debug!("Initializing local inference service");
 
             // Use the config as-is
             let config = inference_config.clone();
@@ -159,17 +161,9 @@ impl ServerBuilder {
         // Build inference service if configured
         let inference_backend = self.build_inference_service().await;
 
-        // Create a dummy request context for now (will be created per-request later)
-        let request_context = Arc::new(NativeRequestContext::new(
-            Default::default(),
-            "http://localhost".to_string(),
-            "GET".to_string(),
-            None,
-        ));
-
         let state = if self.settings.auth.webauthn.enabled {
             // Use WebAuthn configuration from settings
-            let mut webauthn_config = WebAuthnConfig {
+            let webauthn_config = WebAuthnConfig {
                 rp_id: self.settings.auth.webauthn.rp_id.clone(),
                 rp_name: self.settings.auth.webauthn.rp_name.clone(),
                 rp_origin: self.settings.auth.webauthn.rp_origin.clone(),
@@ -179,33 +173,6 @@ impl ServerBuilder {
                 require_user_verification: self.settings.auth.webauthn.require_user_verification,
                 session_timeout_seconds: self.settings.auth.webauthn.session_timeout_seconds,
             };
-
-            // If relay origins are allowed, configure for relay usage
-            if webauthn_config.allow_tlsforward_origins {
-                // Use parent domain as RP ID for relay compatibility
-                // This allows any *.private.hellas.ai subdomain to work
-                webauthn_config.rp_id = "private.hellas.ai".to_string();
-                webauthn_config.rp_name = "Gate (Hellas Relay)".to_string();
-
-                // Also update RP origin to use a relay domain as primary
-                // This ensures the WebAuthn builder has a valid primary origin
-                webauthn_config.rp_origin = "https://private.hellas.ai".to_string();
-
-                // Add common Hellas relay patterns
-                webauthn_config
-                    .allowed_origins
-                    .push("https://*.private.hellas.ai".to_string());
-                webauthn_config.allow_subdomains = true; // Enable subdomain matching for relay domains
-
-                // Also keep the original origin if it was configured
-                if !self.settings.auth.webauthn.rp_origin.is_empty()
-                    && !self.settings.auth.webauthn.rp_origin.contains("localhost")
-                {
-                    webauthn_config
-                        .allowed_origins
-                        .push(self.settings.auth.webauthn.rp_origin.clone());
-                }
-            }
 
             // Use the WebAuthn backend provided to the builder
             let webauthn_backend = self.webauthn_backend.clone();
@@ -231,22 +198,29 @@ impl ServerBuilder {
                 webauthn_backend.clone(),
             ));
 
-            // Create bootstrap manager
-            let bootstrap_manager = Arc::new(BootstrapTokenManager::new(webauthn_backend.clone()));
+            // Use the bootstrap manager from builder (required)
+            let bootstrap_manager = self
+                .bootstrap_manager
+                .clone()
+                .expect("Bootstrap manager must be provided to ServerBuilder");
+
+            // Create permission manager
+            let permission_manager =
+                Arc::new(LocalPermissionManager::new(self.state_backend.clone()));
 
             // Create server state with WebAuthn
             let server_state = ServerState {
                 auth_service,
-                webauthn_service,
+                webauthn_service: Some(webauthn_service),
                 jwt_service,
                 settings: self.settings_arc.clone(),
                 bootstrap_manager,
                 inference_service: inference_backend.clone(),
+                permission_manager,
             };
 
-            let mut app_state =
-                AppState::new(request_context, self.state_backend.clone(), server_state)
-                    .with_upstream_registry(upstream_registry);
+            let mut app_state = AppState::new(self.state_backend.clone(), server_state)
+                .with_upstream_registry(upstream_registry);
 
             if let Some(backend) = inference_backend {
                 app_state = app_state.with_inference_backend(backend);
@@ -266,29 +240,29 @@ impl ServerBuilder {
                 dummy_webauthn_backend.clone(),
             ));
 
-            // Create minimal WebAuthn service (won't be used but needed for container)
-            let webauthn_config = WebAuthnConfig::default();
-            let webauthn_service = Arc::new(
-                WebAuthnService::new(webauthn_config, dummy_webauthn_backend.clone())
-                    .map_err(|e| anyhow::anyhow!("Failed to create WebAuthn service: {}", e))?,
-            );
+            // Use the bootstrap manager from builder (required)
+            let bootstrap_manager = self
+                .bootstrap_manager
+                .clone()
+                .expect("Bootstrap manager must be provided to ServerBuilder");
 
-            // Create bootstrap manager
-            let bootstrap_manager = Arc::new(BootstrapTokenManager::new(dummy_webauthn_backend));
+            // Create permission manager
+            let permission_manager =
+                Arc::new(LocalPermissionManager::new(self.state_backend.clone()));
 
             // Create server state with services
             let server_state = ServerState {
                 auth_service,
-                webauthn_service,
+                webauthn_service: None,
                 jwt_service,
                 settings: self.settings_arc.clone(),
                 bootstrap_manager,
                 inference_service: inference_backend.clone(),
+                permission_manager,
             };
 
-            let mut app_state =
-                AppState::new(request_context, self.state_backend.clone(), server_state)
-                    .with_upstream_registry(upstream_registry);
+            let mut app_state = AppState::new(self.state_backend.clone(), server_state)
+                .with_upstream_registry(upstream_registry);
 
             if let Some(backend) = inference_backend {
                 app_state = app_state.with_inference_backend(backend);
@@ -302,7 +276,7 @@ impl ServerBuilder {
 
     /// Get the WebAuthn service for relay monitoring
     pub fn get_webauthn_service(state: &AppState<ServerState>) -> Arc<WebAuthnService> {
-        state.data.webauthn_service.clone()
+        state.data.webauthn_service.clone().expect("REASON")
     }
 
     /// Build the complete axum router with documentation
@@ -432,7 +406,7 @@ mod tests {
             },
             auth: daemon_config::AuthConfig {
                 jwt: daemon_config::JwtConfig {
-                    secret: Some("test-secret".to_string()),
+                    secret: "test-secret".to_string(),
                     expiration_hours: 24,
                     issuer: "gate-test".to_string(),
                 },
@@ -449,9 +423,6 @@ mod tests {
                 },
                 registration: daemon_config::RegistrationConfig {
                     allow_open_registration: true,
-                    default_user_role: "user".to_string(),
-                    admin_roles: vec!["admin".to_string()],
-                    bootstrap_admin_role: "admin".to_string(),
                 },
             },
             upstreams: vec![],
@@ -495,11 +466,16 @@ mod tests {
         ));
 
         let settings_arc = Arc::new(settings.clone());
-        let builder = ServerBuilder::new(settings, state_backend, webauthn_backend, settings_arc);
+        let mut builder =
+            ServerBuilder::new(settings, state_backend, webauthn_backend, settings_arc);
 
         // Build JWT service
         let jwt_service = builder.build_jwt_service();
         // JWT service was created successfully
+
+        let bootstrap_manager =
+            Arc::new(BootstrapTokenManager::new(builder.webauthn_backend.clone()));
+        builder = builder.with_bootstrap_manager(bootstrap_manager);
 
         // Build upstream registry
         let upstream_registry = builder.build_upstream_registry().await.unwrap();

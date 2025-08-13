@@ -7,10 +7,11 @@
 use crate::{
     ApiKey, Model, ModelType, Organization, Provider, ProviderType, Result, StateBackend,
     TimeRange, UsageRecord, User,
+    access::{Action, ObjectIdentity},
 };
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 /// Test suite for StateBackend implementations
 pub struct StateBackendTestSuite<B: StateBackend> {
@@ -44,7 +45,6 @@ impl<B: StateBackend> StateBackendTestSuite<B> {
         let user = User {
             id: format!("test-user-{}", uuid::Uuid::new_v4()),
             name: Some("Test User".to_string()),
-            role: "user".to_string(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
             metadata: metadata.clone(),
@@ -259,7 +259,6 @@ pub mod fixtures {
         User {
             id: id.unwrap_or_else(|| format!("user-{}", uuid::Uuid::new_v4())),
             name: Some("Test User".to_string()),
-            role: "user".to_string(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
             metadata,
@@ -319,12 +318,12 @@ pub mod fixtures {
 /// use the mockall-based MockStateBackend from the parent module instead.
 #[derive(Clone, Default)]
 pub struct InMemoryBackend {
-    users: std::sync::Arc<std::sync::Mutex<HashMap<String, User>>>,
-    api_keys: std::sync::Arc<std::sync::Mutex<HashMap<String, ApiKey>>>,
-    usage_records: std::sync::Arc<std::sync::Mutex<Vec<UsageRecord>>>,
-    providers: std::sync::Arc<std::sync::Mutex<HashMap<String, Provider>>>,
-    models: std::sync::Arc<std::sync::Mutex<HashMap<String, Model>>>,
-    organizations: std::sync::Arc<std::sync::Mutex<HashMap<String, Organization>>>,
+    users: Arc<std::sync::Mutex<HashMap<String, User>>>,
+    api_keys: Arc<std::sync::Mutex<HashMap<String, ApiKey>>>,
+    usage_records: Arc<std::sync::Mutex<Vec<UsageRecord>>>,
+    providers: Arc<std::sync::Mutex<HashMap<String, Provider>>>,
+    models: Arc<std::sync::Mutex<HashMap<String, Model>>>,
+    organizations: Arc<std::sync::Mutex<HashMap<String, Organization>>>,
 }
 
 #[async_trait]
@@ -358,21 +357,10 @@ impl StateBackend for InMemoryBackend {
         Ok(())
     }
 
-    async fn list_users(&self, filter: Option<&str>) -> Result<Vec<User>> {
-        let users = self.users.lock().unwrap();
-        let mut result: Vec<User> = if let Some(role_filter) = filter {
-            users
-                .values()
-                .filter(|u| u.role == role_filter)
-                .cloned()
-                .collect()
-        } else {
-            users.values().cloned().collect()
-        };
-
-        // Sort by created_at descending to match SQL behavior
-        result.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-        Ok(result)
+    async fn list_users(&self) -> Result<Vec<User>> {
+        let mut results: Vec<_> = self.users.lock().unwrap().values().cloned().collect();
+        results.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        Ok(results)
     }
 
     async fn get_api_key(&self, key_hash: &str) -> Result<Option<ApiKey>> {
@@ -476,6 +464,36 @@ impl StateBackend for InMemoryBackend {
             .lock()
             .unwrap()
             .insert(org.id.clone(), org.clone());
+        Ok(())
+    }
+
+    async fn has_permission(
+        &self,
+        _subject_id: &str,
+        _action: &Action,
+        _object: &ObjectIdentity,
+    ) -> Result<bool> {
+        // For tests, just return true
+        Ok(true)
+    }
+
+    async fn grant_permission(
+        &self,
+        _subject_id: &str,
+        _action: &Action,
+        _object: &ObjectIdentity,
+    ) -> Result<()> {
+        // For tests, just return Ok
+        Ok(())
+    }
+
+    async fn remove_permission(
+        &self,
+        _subject_id: &str,
+        _action: &Action,
+        _object: &ObjectIdentity,
+    ) -> Result<()> {
+        // For tests, just return Ok
         Ok(())
     }
 }

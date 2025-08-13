@@ -20,16 +20,16 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1752950548,
-        "narHash": "sha256-NS6BLD0lxOrnCiEOcvQCDVPXafX1/ek1dfJHX1nUIzc=",
-        "owner": "NixOS",
+        "lastModified": 1753978232,
+        "narHash": "sha256-r35MbIGoPgIBGMo+EiFmQQMRdRbb5pezUq8dBlitaMM=",
+        "owner": "RossComputerGuy",
         "repo": "nixpkgs",
-        "rev": "c87b95e25065c028d31a94f06a62927d18763fdf",
+        "rev": "530378f84a5285c85bb5660b27de3c1918f2b3c7",
         "type": "github"
       },
       "original": {
-        "owner": "NixOS",
-        "ref": "nixos-unstable",
+        "owner": "RossComputerGuy",
+        "ref": "fix/rustc-llvm",
         "repo": "nixpkgs",
         "type": "github"
       }
@@ -48,11 +48,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1753238793,
-        "narHash": "sha256-jmQeEpgX+++MEgrcikcwoSiI7vDZWLP0gci7XiWb9uQ=",
+        "lastModified": 1755052812,
+        "narHash": "sha256-Tjw2YP7Hz8+ibE8wJ+Ps65vh1lzAe5ozmoo9sdQ7rGg=",
         "owner": "oxalica",
         "repo": "rust-overlay",
-        "rev": "0ad7ab4ca8e83febf147197e65c006dff60623ab",
+        "rev": "433023cba5f4fa66b8b0fdbb8f91d420c9cc2527",
         "type": "github"
       },
       "original": {

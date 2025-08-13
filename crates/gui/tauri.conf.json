@@ -12,8 +12,8 @@
     "windows": [
       {
         "title": "Hellas Gate",
-        "width": 200,
-        "height": 300,
+        "width": 400,
+        "height": 600,
         "resizable": false
       }
     ],

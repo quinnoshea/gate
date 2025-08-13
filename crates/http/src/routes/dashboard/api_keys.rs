@@ -1,6 +1,6 @@
 //! API Key management endpoints
 
-use crate::{error::HttpError, middleware::auth::AuthenticatedUser, state::AppState};
+use crate::{error::HttpError, services::HttpIdentity, state::AppState};
 use axum::{
     extract::{Extension, Path, State},
     response::Json,
@@ -95,13 +95,13 @@ impl From<ApiKey> for ApiKeyResponse {
     name = "create_api_key",
     skip(app_state),
     fields(
-        user_id = %user.id,
+        user_id = %identity.id,
         key_name = %request.name
     )
 )]
 pub async fn create_api_key<T>(
     State(app_state): State<AppState<T>>,
-    Extension(user): Extension<AuthenticatedUser>,
+    Extension(identity): Extension<HttpIdentity>,
     Json(request): Json<CreateApiKeyRequest>,
 ) -> Result<Json<CreateApiKeyResponse>, HttpError>
 where
@@ -115,7 +115,7 @@ where
     let api_key = ApiKey {
         key_hash: key_hash.clone(),
         name: request.name.clone(),
-        org_id: user.id.clone(),
+        org_id: identity.id.clone(),
         config: request.config,
         created_at: Utc::now(),
         last_used_at: None,
@@ -150,20 +150,20 @@ where
     name = "list_api_keys",
     skip(app_state),
     fields(
-        user_id = %user.id,
+        user_id = %identity.id,
         key_count = tracing::field::Empty
     )
 )]
 pub async fn list_api_keys<T>(
     State(app_state): State<AppState<T>>,
-    Extension(user): Extension<AuthenticatedUser>,
+    Extension(identity): Extension<HttpIdentity>,
 ) -> Result<Json<Vec<ApiKeyResponse>>, HttpError>
 where
     T: Clone + Send + Sync + 'static,
 {
     let keys = app_state
         .state_backend
-        .list_api_keys(&user.id)
+        .list_api_keys(&identity.id)
         .await
         .map_err(|e| HttpError::InternalServerError(e.to_string()))?;
 
@@ -193,13 +193,13 @@ where
     name = "update_api_key",
     skip(app_state, request),
     fields(
-        user_id = %user.id,
+        user_id = %identity.id,
         key_hash = %key_hash
     )
 )]
 pub async fn update_api_key<T>(
     State(app_state): State<AppState<T>>,
-    Extension(user): Extension<AuthenticatedUser>,
+    Extension(identity): Extension<HttpIdentity>,
     Path(key_hash): Path<String>,
     Json(request): Json<UpdateApiKeyRequest>,
 ) -> Result<Json<ApiKeyResponse>, HttpError>
@@ -215,7 +215,7 @@ where
         .ok_or(HttpError::NotFound("API key not found".to_string()))?;
 
     // Verify ownership
-    if api_key.org_id != user.id {
+    if api_key.org_id != identity.id {
         return Err(HttpError::AuthorizationFailed("Not authorized".to_string()));
     }
 
@@ -253,13 +253,13 @@ where
     name = "delete_api_key",
     skip(app_state),
     fields(
-        user_id = %user.id,
+        user_id = %identity.id,
         key_hash = %key_hash
     )
 )]
 pub async fn delete_api_key<T>(
     State(app_state): State<AppState<T>>,
-    Extension(user): Extension<AuthenticatedUser>,
+    Extension(identity): Extension<HttpIdentity>,
     Path(key_hash): Path<String>,
 ) -> Result<(), HttpError>
 where
@@ -274,7 +274,7 @@ where
         .ok_or(HttpError::NotFound("API key not found".to_string()))?;
 
     // Verify ownership
-    if api_key.org_id != user.id {
+    if api_key.org_id != identity.id {
         return Err(HttpError::AuthorizationFailed("Not authorized".to_string()));
     }
 
