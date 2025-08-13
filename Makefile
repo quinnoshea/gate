@@ -12,9 +12,28 @@ RUST_BACKTRACE ?= 1
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
     OPEN_CMD = open
-else
+    TARGET_SUFFIX = -apple-darwin
+else ifeq ($(UNAME_S),Linux)
     OPEN_CMD = xdg-open
+    TARGET_SUFFIX = -unknown-linux-gnu
+else
+    # Windows (MSYS2/Cygwin/WSL)
+    OPEN_CMD = explorer
+    TARGET_SUFFIX = -pc-windows-msvc
 endif
+
+# Architecture detection
+UNAME_M := $(shell uname -m)
+ifeq ($(UNAME_M),arm64)
+    ARCH = aarch64
+else ifeq ($(UNAME_M),aarch64)
+    ARCH = aarch64
+else
+    ARCH = x86_64
+endif
+
+# Full target triple
+TARGET = $(ARCH)$(TARGET_SUFFIX)
 
 # Colors for output
 RED = \033[0;31m
@@ -55,6 +74,14 @@ build: ## Build all crates in release mode
 dev: ## Build all crates in debug mode
 	@echo "$(GREEN)Building all crates in debug mode...$(NC)"
 	$(CARGO) build --all
+
+build-windows: ## Cross-compile for Windows (x86_64-pc-windows-msvc)
+	@echo "$(GREEN)Building for Windows (x86_64-pc-windows-msvc)...$(NC)"
+	$(CARGO) build --release --target x86_64-pc-windows-msvc --all
+
+build-windows-gnu: ## Cross-compile for Windows (x86_64-pc-windows-gnu)
+	@echo "$(GREEN)Building for Windows (x86_64-pc-windows-gnu)...$(NC)"
+	$(CARGO) build --release --target x86_64-pc-windows-gnu --all
 
 run: ## Run the Gate server
 	@echo "$(GREEN)Starting Gate server...$(NC)"

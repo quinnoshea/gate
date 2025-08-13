@@ -46,6 +46,7 @@ getrandom = { workspace = true, features = ["wasm_js"], optional = true }
 
 # Optional dependencies for tracing-otlp feature (native only)
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 opentelemetry = { version = "0.30", default-features = false, features = ["trace"], optional = true }
 opentelemetry-otlp = { version = "0.30", default-features = false, features = ["trace", "http-proto", "reqwest-blocking-client"], optional = true }
 opentelemetry_sdk = { version = "0.30", default-features = false, features = ["trace", "rt-tokio"], optional = true }

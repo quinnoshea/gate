@@ -44,6 +44,8 @@ jobs:
             target: x86_64-apple-darwin
           - os: macos-latest
             target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
     steps:
     - uses: actions/checkout@v4
     
@@ -92,10 +94,15 @@ jobs:
           "Linux-X64") BINARY="tailwindcss-linux-x64" ;;
           "macOS-X64") BINARY="tailwindcss-macos-x64" ;;
           "macOS-ARM64") BINARY="tailwindcss-macos-arm64" ;;
+          "Windows-X64") BINARY="tailwindcss-windows-x64.exe" ;;
         esac
         
-        curl -sL "https://github.com/tailwindlabs/tailwindcss/releases/download/v4.1.11/${BINARY}" -o /usr/local/bin/tailwindcss
-        chmod +x /usr/local/bin/tailwindcss
+        if [[ "${{ runner.os }}" == "Windows" ]]; then
+          curl -sL "https://github.com/tailwindlabs/tailwindcss/releases/download/v4.1.11/${BINARY}" -o "$HOME/.cargo/bin/tailwindcss.exe"
+        else
+          curl -sL "https://github.com/tailwindlabs/tailwindcss/releases/download/v4.1.11/${BINARY}" -o /usr/local/bin/tailwindcss
+          chmod +x /usr/local/bin/tailwindcss
+        fi
     
     # Linux-specific dependencies
     - name: Install Linux dependencies
@@ -126,6 +133,13 @@ jobs:
             echo "Found Linux bundles"
             cp -r target/release/bundle/deb/*.deb artifacts/ 2>/dev/null || true
             cp -r target/release/bundle/appimage/*.AppImage artifacts/ 2>/dev/null || true
+          fi
+        elif [[ "${{ runner.os }}" == "Windows" ]]; then
+          # Windows: Look for MSI and NSIS installers
+          if [[ -d "target/release/bundle" ]]; then
+            echo "Found Windows bundles"
+            cp -r target/release/bundle/msi/*.msi artifacts/ 2>/dev/null || true
+            cp -r target/release/bundle/nsis/*.exe artifacts/ 2>/dev/null || true
           fi
         fi
         
