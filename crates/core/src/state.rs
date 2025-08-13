@@ -1,8 +1,10 @@
-use crate::{ApiKey, Model, Organization, Provider, Result, TimeRange, UsageRecord, User};
+use crate::{
+    ApiKey, Model, Organization, Provider, Result, TimeRange, UsageRecord, User,
+    access::{Action, ObjectIdentity},
+};
 use async_trait::async_trait;
 
 #[async_trait]
-#[cfg_attr(test, mockall::automock)]
 pub trait StateBackend: Send + Sync {
     // User management
     async fn get_user(&self, user_id: &str) -> Result<Option<User>>;
@@ -18,7 +20,7 @@ pub trait StateBackend: Send + Sync {
     async fn list_api_keys(&self, org_id: &str) -> Result<Vec<ApiKey>>;
     async fn delete_api_key(&self, key_hash: &str) -> Result<()>;
 
-    // Usage tracking (basic, always visible)
+    // Usage tracking
     async fn record_usage(&self, usage: &UsageRecord) -> Result<()>;
     async fn get_usage(&self, org_id: &str, range: &TimeRange) -> Result<Vec<UsageRecord>>;
 
@@ -33,8 +35,26 @@ pub trait StateBackend: Send + Sync {
     // Organization management
     async fn get_organization(&self, id: &str) -> Result<Option<Organization>>;
     async fn create_organization(&self, org: &Organization) -> Result<()>;
-}
 
-// Mock implementation for testing
-// TODO: Fix mockall lifetime issues with Option<&str> in async functions
-// For now, mocks can be created manually in tests as needed
+    // Permission management
+    async fn has_permission(
+        &self,
+        subject_id: &str,
+        action: &Action,
+        object: &ObjectIdentity,
+    ) -> Result<bool>;
+
+    async fn grant_permission(
+        &self,
+        subject_id: &str,
+        action: &Action,
+        object: &ObjectIdentity,
+    ) -> Result<()>;
+
+    async fn remove_permission(
+        &self,
+        subject_id: &str,
+        action: &Action,
+        object: &ObjectIdentity,
+    ) -> Result<()>;
+}

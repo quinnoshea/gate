@@ -2,6 +2,7 @@
 
 use crate::bootstrap::BootstrapTokenManager;
 use crate::config::Settings;
+use crate::permissions::LocalPermissionManager;
 use crate::{NativeRequestContext, ServerState};
 use anyhow::Result;
 use axum;
@@ -219,6 +220,10 @@ impl ServerBuilder {
             // Create bootstrap manager
             let bootstrap_manager = Arc::new(BootstrapTokenManager::new(webauthn_backend.clone()));
 
+            // Create permission manager
+            let permission_manager =
+                Arc::new(LocalPermissionManager::new(self.state_backend.clone()));
+
             // Create server state with WebAuthn
             let server_state = ServerState {
                 auth_service,
@@ -227,6 +232,7 @@ impl ServerBuilder {
                 settings: self.settings_arc.clone(),
                 bootstrap_manager,
                 inference_service: inference_backend.clone(),
+                permission_manager,
             };
 
             let mut app_state = AppState::new(self.state_backend.clone(), server_state)
@@ -260,6 +266,10 @@ impl ServerBuilder {
             // Create bootstrap manager
             let bootstrap_manager = Arc::new(BootstrapTokenManager::new(dummy_webauthn_backend));
 
+            // Create permission manager
+            let permission_manager =
+                Arc::new(LocalPermissionManager::new(self.state_backend.clone()));
+
             // Create server state with services
             let server_state = ServerState {
                 auth_service,
@@ -268,6 +278,7 @@ impl ServerBuilder {
                 settings: self.settings_arc.clone(),
                 bootstrap_manager,
                 inference_service: inference_backend.clone(),
+                permission_manager,
             };
 
             let mut app_state = AppState::new(self.state_backend.clone(), server_state)

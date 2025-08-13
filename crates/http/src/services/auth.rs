@@ -1,8 +1,6 @@
-//! Authentication service for coordinating auth operations
-
 use crate::error::HttpError;
-use crate::middleware::auth::AuthenticatedUser;
 use crate::services::JwtService;
+use crate::services::identity::{HttpContext, HttpIdentity};
 use crate::types::{AuthCompleteResponse, RegisterCompleteResponse};
 use chrono::Utc;
 use gate_core::{StateBackend, StoredCredential, User, WebAuthnBackend};
@@ -17,7 +15,6 @@ pub struct AuthService {
 }
 
 impl AuthService {
-    /// Create a new authentication service
     pub fn new(
         jwt_service: Arc<JwtService>,
         state_backend: Arc<dyn StateBackend>,
@@ -30,7 +27,6 @@ impl AuthService {
         }
     }
 
-    /// Complete user registration and return auth response
     pub async fn complete_registration(
         &self,
         user: User,
@@ -38,24 +34,21 @@ impl AuthService {
         device_name: Option<String>,
         passkey: Passkey,
     ) -> Result<RegisterCompleteResponse, HttpError> {
-        // Store user in database first
         self.state_backend
             .create_user(&user)
             .await
             .map_err(|e| HttpError::InternalServerError(format!("Failed to create user: {e}")))?;
 
-        // Serialize the passkey for storage
         let passkey_data = serde_json::to_vec(&passkey).map_err(|e| {
             HttpError::InternalServerError(format!("Failed to serialize passkey: {e}"))
         })?;
 
-        // Now store the WebAuthn credential
         let stored_credential = StoredCredential {
             credential_id: credential_id.clone(),
             user_id: user.id.clone(),
             public_key: passkey_data,
             aaguid: None,
-            counter: 0, // Initial counter value
+            counter: 0,
             created_at: Utc::now(),
             last_used_at: None,
             device_name,
@@ -68,7 +61,6 @@ impl AuthService {
                 HttpError::InternalServerError(format!("Failed to store credential: {e}"))
             })?;
 
-        // Generate JWT token
         let token = self
             .jwt_service
             .generate_token(&user.id, user.name.as_deref())?;
@@ -81,13 +73,11 @@ impl AuthService {
         })
     }
 
-    /// Complete user authentication and return auth response
     pub async fn complete_authentication(
         &self,
         credential_id: String,
         counter: u32,
     ) -> Result<AuthCompleteResponse, HttpError> {
-        // Get user by credential ID
         let user = self
             .state_backend
             .get_user_by_id(&credential_id)
@@ -95,7 +85,6 @@ impl AuthService {
             .map_err(|e| HttpError::InternalServerError(format!("Failed to get user: {e}")))?
             .ok_or_else(|| HttpError::NotFound("User not found".to_string()))?;
 
-        // Update credential counter
         self.webauthn_backend
             .update_credential_counter(&credential_id, counter)
             .await
@@ -103,7 +92,6 @@ impl AuthService {
                 HttpError::InternalServerError(format!("Failed to update credential: {e}"))
             })?;
 
-        // Generate JWT token
         let token = self
             .jwt_service
             .generate_token(&user.id, user.name.as_deref())?;
@@ -115,29 +103,23 @@ impl AuthService {
         })
     }
 
-    /// Validate a JWT token and return authenticated user
-    pub fn validate_token(&self, token: &str) -> Result<AuthenticatedUser, HttpError> {
+    pub fn validate_token(&self, token: &str) -> Result<HttpIdentity, HttpError> {
         let claims = self.jwt_service.validate_token(token)?;
 
-        // TODO: invalidation check
+        let identity = HttpIdentity::new(
+            claims.sub.clone(),
+            "jwt".to_string(),
+            HttpContext::new()
+                .with_attribute("auth_method", "webauthn")
+                .with_attribute("issued_at", claims.iat.to_string())
+                .with_attribute("expires_at", claims.exp.to_string())
+                .with_attribute("name", claims.name.as_deref().unwrap_or("")),
+        );
 
-        Ok(AuthenticatedUser {
-            id: claims.sub,
-            name: claims.name,
-            email: None,
-            metadata: serde_json::json!({
-                "auth_method": "webauthn",
-                "issued_at": claims.iat,
-                "expires_at": claims.exp,
-            }),
-        })
+        Ok(identity)
     }
 
-    /// Extract and validate token from Authorization header
-    pub fn authenticate_from_header(
-        &self,
-        auth_header: &str,
-    ) -> Result<AuthenticatedUser, HttpError> {
+    pub fn authenticate_from_header(&self, auth_header: &str) -> Result<HttpIdentity, HttpError> {
         let token = self.jwt_service.extract_bearer_token(auth_header)?;
         self.validate_token(token)
     }

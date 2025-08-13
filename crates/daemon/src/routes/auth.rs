@@ -7,8 +7,7 @@ use chrono::{DateTime, Utc};
 use gate_core::{BootstrapTokenValidator, User};
 use gate_http::{
     error::HttpError,
-    middleware::auth::AuthenticatedUser,
-    services::{AuthService, WebAuthnService},
+    services::{AuthService, HttpIdentity, WebAuthnService},
     state::AppState,
 };
 use std::sync::Arc;
@@ -86,7 +85,7 @@ impl From<User> for CurrentUser {
 )]
 async fn get_current_user<T>(
     State(app_state): State<AppState<T>>,
-    user: AuthenticatedUser,
+    identity: HttpIdentity,
 ) -> Result<Json<CurrentUser>, HttpError>
 where
     T: AsRef<Option<Arc<WebAuthnService>>>
@@ -97,7 +96,7 @@ where
     // Get user from database
     let user_data = app_state
         .state_backend
-        .get_user(&user.id)
+        .get_user(&identity.id)
         .await
         .map_err(|e| HttpError::InternalServerError(format!("Failed to get user: {e}")))?
         .ok_or_else(|| HttpError::AuthorizationFailed("User not found".to_string()))?;

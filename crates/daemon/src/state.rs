@@ -1,5 +1,6 @@
 use crate::bootstrap::BootstrapTokenManager;
 use crate::config::Settings;
+use crate::permissions::LocalPermissionManager;
 use gate_core::InferenceBackend;
 use gate_http::services::{AuthService, JwtService, WebAuthnService};
 use std::sync::Arc;
@@ -13,6 +14,7 @@ pub struct ServerState {
     pub bootstrap_manager: Arc<BootstrapTokenManager>,
     pub webauthn_service: Option<Arc<WebAuthnService>>,
     pub inference_service: Option<Arc<dyn InferenceBackend>>,
+    pub permission_manager: Arc<LocalPermissionManager>,
 }
 
 // Implement AsRef for each service Arc to allow easy access
@@ -43,5 +45,11 @@ impl AsRef<Arc<Settings>> for ServerState {
 impl AsRef<Arc<BootstrapTokenManager>> for ServerState {
     fn as_ref(&self) -> &Arc<BootstrapTokenManager> {
         &self.bootstrap_manager
+    }
+}
+
+impl AsRef<Arc<LocalPermissionManager>> for ServerState {
+    fn as_ref(&self) -> &Arc<LocalPermissionManager> {
+        &self.permission_manager
     }
 }

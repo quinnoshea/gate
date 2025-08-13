@@ -4,7 +4,7 @@ use gate_core::tracing::{
     config::{InstrumentationConfig, OtlpConfig},
     init::init_tracing,
 };
-use gate_daemon::{runtime::Runtime, Settings};
+use gate_daemon::{Settings, runtime::Runtime};
 use tracing::info;
 
 /// Gate daemon - High-performance AI gateway
@@ -18,8 +18,10 @@ struct Cli {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize crypto provider
-    gate_core::crypto::init_rustls();
+    // Initialize rustls crypto provider for TLS connections
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
 
     // Parse command line arguments
     let cli = Cli::parse();
@@ -44,35 +46,35 @@ async fn main() -> Result<()> {
 
     // Build runtime
     let mut builder = Runtime::builder();
-    
+
     // Load configuration if specified
     if let Some(config_path) = cli.config {
         info!("Loading configuration from: {}", config_path);
         let settings = Settings::load_from_file(&config_path)?;
         builder = builder.with_settings(settings);
     }
-    
+
     // Set static directory if specified
     if let Ok(static_dir) = std::env::var("GATE_SERVER__STATIC_DIR") {
         builder = builder.with_static_dir(static_dir);
     }
-    
+
     // Build the runtime
     let runtime = builder.build().await?;
-    
+
     // Print startup information
     if let Some(url) = runtime.bootstrap_url() {
         println!("Server running at: {}", url);
     } else {
         println!("Server running at: http://{}/", runtime.server_address());
     }
-    
+
     // Start monitoring tasks
     runtime.start_monitoring().await;
-    
+
     // Start metrics server
     let metrics_handle = runtime.start_metrics().await?;
-    
+
     // Spawn server task
     let runtime_clone = runtime.clone();
     let server_handle = tokio::spawn(async move {
@@ -80,24 +82,21 @@ async fn main() -> Result<()> {
             tracing::error!("Server error: {}", e);
         }
     });
-    
+
     // Wait for Ctrl+C
     tokio::signal::ctrl_c().await?;
     info!("Received shutdown signal");
-    
+
     // Graceful shutdown
     runtime.shutdown().await;
-    
+
     // Wait for server to stop
-    let _ = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        server_handle
-    ).await;
-    
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(5), server_handle).await;
+
     // Stop metrics server
     if let Some(handle) = metrics_handle {
         handle.abort();
     }
-    
+
     Ok(())
 }

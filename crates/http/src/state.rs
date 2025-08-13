@@ -79,16 +79,3 @@ impl<T> AppState<T> {
         self
     }
 }
-
-#[cfg(test)]
-impl Default for AppState<()> {
-    fn default() -> Self {
-        use gate_core::tests::{context::MockRequestContext, state::InMemoryBackend};
-
-        Self::new(
-            // Arc::new(MockRequestContext::default()),
-            Arc::new(InMemoryBackend::default()),
-            (),
-        )
-    }
-}

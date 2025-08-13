@@ -9,8 +9,7 @@ keywords.workspace = true
 categories.workspace = true
 
 [features]
-default = ["postgres", "sqlite"]
-postgres = ["sqlx/postgres"]
+default = ["sqlite"]
 sqlite = ["sqlx/sqlite"]
 
 [dependencies]

@@ -1,15 +1,13 @@
 use anyhow::Result;
-use gate_p2p::{Endpoint, NodeAddr, Router, SecretKey, discovery::static_provider::StaticProvider};
-use gate_tlsforward::{TlsForwardHandler, TLS_FORWARD_ALPN};
 use gate_http::server::HttpServer;
+use gate_p2p::{Endpoint, NodeAddr, Router, SecretKey, discovery::static_provider::StaticProvider};
+use gate_tlsforward::{TLS_FORWARD_ALPN, TlsForwardHandler};
 use std::path::Path;
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    config::TlsForwardConfig,
-    services::TlsForwardService,
-    tls_reload::ReloadableTlsAcceptor,
+    config::TlsForwardConfig, services::TlsForwardService, tls_reload::ReloadableTlsAcceptor,
 };
 
 /// P2P configuration
@@ -30,27 +28,28 @@ impl P2PManager {
     pub async fn new(config: P2PConfig) -> Result<Self> {
         // Load or create P2P secret key
         let secret_key = load_or_create_p2p_secret_key(&config.secret_key_path).await?;
-        
+
         // Create P2P endpoint
         let endpoint = create_p2p_endpoint(
             secret_key,
             config.enable_discovery,
             &config.tlsforward_addresses,
-        ).await?;
-        
+        )
+        .await?;
+
         info!("P2P endpoint created with node ID: {}", endpoint.node_id());
-        
+
         Ok(Self {
             endpoint,
             router: None,
         })
     }
-    
+
     /// Get the P2P endpoint
     pub fn endpoint(&self) -> Arc<Endpoint> {
         self.endpoint.clone()
     }
-    
+
     /// Setup TLS forward handler for accepting incoming connections
     pub fn setup_tls_forward_handler(
         &mut self,
@@ -66,29 +65,32 @@ impl P2PManager {
             max_connections,
             connection_timeout_secs,
         );
-        
+
         // Create router and register the TLS forward handler
         let router = Router::builder(self.endpoint.as_ref().clone())
             .accept(TLS_FORWARD_ALPN, tls_handler)
             .spawn();
-        
+
         debug!("Registered TLS forward handler on P2P endpoint");
         self.router = Some(router);
-        
+
         Ok(())
     }
-    
+
     /// Start TLS forward client service
-    pub async fn start_tlsforward_service(&self, config: TlsForwardConfig) -> Result<Arc<TlsForwardService>> {
+    pub async fn start_tlsforward_service(
+        &self,
+        config: TlsForwardConfig,
+    ) -> Result<Arc<TlsForwardService>> {
         debug!("Initializing TLS forward client service");
-        
+
         let service = TlsForwardService::builder(config, self.endpoint.clone())
             .build()
             .await?;
-        
+
         Ok(service)
     }
-    
+
     /// Wait for TLS forward service to connect and return node ID
     pub async fn wait_for_tlsforward_connection(
         &self,
@@ -102,7 +104,10 @@ impl P2PManager {
             }
             retry_count += 1;
             if retry_count > timeout_secs {
-                warn!("TLS forward server not connected after {} seconds", timeout_secs);
+                warn!(
+                    "TLS forward server not connected after {} seconds",
+                    timeout_secs
+                );
                 return None;
             }
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -113,7 +118,7 @@ impl P2PManager {
 /// Load or create P2P secret key
 async fn load_or_create_p2p_secret_key(path: &Path) -> Result<SecretKey> {
     use tokio::fs;
-    
+
     if path.exists() {
         // Try to load existing key
         match fs::read_to_string(&path).await {
@@ -128,18 +133,28 @@ async fn load_or_create_p2p_secret_key(path: &Path) -> Result<SecretKey> {
                         Ok(secret_key)
                     }
                     _ => {
-                        warn!("Invalid P2P secret key format in {}, generating new key", path.display());
+                        warn!(
+                            "Invalid P2P secret key format in {}, generating new key",
+                            path.display()
+                        );
                         create_and_save_p2p_key(path).await
                     }
                 }
             }
             Err(e) => {
-                warn!("Failed to read P2P secret key from {}: {}, generating new key", path.display(), e);
+                warn!(
+                    "Failed to read P2P secret key from {}: {}, generating new key",
+                    path.display(),
+                    e
+                );
                 create_and_save_p2p_key(path).await
             }
         }
     } else {
-        info!("P2P secret key file not found at {}, generating new key", path.display());
+        info!(
+            "P2P secret key file not found at {}, generating new key",
+            path.display()
+        );
         create_and_save_p2p_key(path).await
     }
 }
@@ -148,16 +163,16 @@ async fn load_or_create_p2p_secret_key(path: &Path) -> Result<SecretKey> {
 async fn create_and_save_p2p_key(path: &Path) -> Result<SecretKey> {
     use rand::rngs::OsRng;
     use tokio::fs;
-    
+
     let secret_key = SecretKey::generate(OsRng);
     let key_bytes = secret_key.to_bytes();
     let hex_key = hex::encode(key_bytes);
-    
+
     // Ensure parent directory exists
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).await?;
     }
-    
+
     fs::write(path, hex_key).await?;
     info!("Created and saved new P2P secret key to {}", path.display());
     Ok(secret_key)
@@ -170,15 +185,15 @@ async fn create_p2p_endpoint(
     tlsforward_servers: &[String],
 ) -> Result<Arc<Endpoint>> {
     let mut endpoint_builder = Endpoint::builder().secret_key(secret_key);
-    
+
     if enable_discovery {
         endpoint_builder = endpoint_builder.discovery_n0();
     }
-    
+
     // Add static discovery for TLS forward servers if configured
     if !tlsforward_servers.is_empty() {
         let static_provider = StaticProvider::new();
-        
+
         for server in tlsforward_servers {
             // Parse TLS forward server address
             if let Some((node_id_str, addr_str)) = server.split_once('@')
@@ -197,9 +212,9 @@ async fn create_p2p_endpoint(
                 );
             }
         }
-        
+
         endpoint_builder = endpoint_builder.add_discovery(static_provider);
     }
-    
+
     Ok(Arc::new(endpoint_builder.bind().await?))
 }

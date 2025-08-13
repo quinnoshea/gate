@@ -1,5 +1,5 @@
 use crate::state::{DaemonState, TlsForwardStatus};
-use gate_daemon::{runtime::Runtime, Settings};
+use gate_daemon::{Settings, runtime::Runtime};
 use tauri::{AppHandle, State};
 use tracing::{error, info};
 
@@ -13,7 +13,7 @@ pub async fn start_daemon(
     if state.is_running().await {
         return Err("Daemon is already running".to_string());
     }
-    
+
     // Load or use provided config
     let mut settings = if let Some(cfg) = config {
         // Save the new config
@@ -22,12 +22,14 @@ pub async fn start_daemon(
         }
         cfg
     } else {
-        state.load_config().unwrap_or_else(|_| Settings::gui_preset())
+        state
+            .load_config()
+            .unwrap_or_else(|_| Settings::gui_preset())
     };
-    
+
     // Apply GUI overrides
     settings.apply_gui_overrides();
-    
+
     // Build runtime
     let runtime = Runtime::builder()
         .gui_mode()
@@ -35,16 +37,18 @@ pub async fn start_daemon(
         .build()
         .await
         .map_err(|e| format!("Failed to build runtime: {}", e))?;
-    
+
     let address = runtime.server_address();
-    
+
     // Start monitoring
     runtime.start_monitoring().await;
-    
+
     // Start metrics if configured
-    runtime.start_metrics().await
+    runtime
+        .start_metrics()
+        .await
         .map_err(|e| format!("Failed to start metrics: {}", e))?;
-    
+
     // Spawn server task
     let runtime_clone = runtime.clone();
     let handle = tokio::spawn(async move {
@@ -52,11 +56,11 @@ pub async fn start_daemon(
             error!("Server error: {}", e);
         }
     });
-    
+
     // Store runtime and handle
     state.set_runtime(runtime).await;
     state.set_handle(handle).await;
-    
+
     Ok(format!("Daemon started at http://{}", address))
 }
 
@@ -65,7 +69,7 @@ pub async fn stop_daemon(state: State<'_, DaemonState>) -> Result<String, String
     if !state.is_running().await {
         return Err("Daemon is not running".to_string());
     }
-    
+
     state.shutdown().await;
     Ok("Daemon stopped successfully".to_string())
 }
@@ -77,7 +81,8 @@ pub async fn daemon_status(state: State<'_, DaemonState>) -> Result<bool, String
 
 #[tauri::command]
 pub async fn get_daemon_config(state: State<'_, DaemonState>) -> Result<Settings, String> {
-    state.load_config()
+    state
+        .load_config()
         .map_err(|e| format!("Failed to load config: {}", e))
 }
 
@@ -93,7 +98,7 @@ pub async fn restart_daemon(
         // Wait a bit for cleanup
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
     }
-    
+
     // Start with new config
     start_daemon(state, app, config).await
 }
@@ -109,7 +114,7 @@ pub async fn get_daemon_status(state: State<'_, DaemonState>) -> Result<serde_js
     } else {
         serde_json::json!({})
     };
-    
+
     Ok(serde_json::json!({
         "running": running,
         "config": runtime_config,
@@ -118,7 +123,7 @@ pub async fn get_daemon_status(state: State<'_, DaemonState>) -> Result<serde_js
 
 #[tauri::command]
 pub async fn get_daemon_runtime_config(
-    state: State<'_, DaemonState>
+    state: State<'_, DaemonState>,
 ) -> Result<serde_json::Value, String> {
     if let Some(runtime) = state.get_runtime().await {
         Ok(serde_json::json!({
@@ -132,7 +137,7 @@ pub async fn get_daemon_runtime_config(
 
 #[tauri::command]
 pub async fn get_tlsforward_status(
-    state: State<'_, DaemonState>
+    state: State<'_, DaemonState>,
 ) -> Result<TlsForwardStatus, String> {
     if let Some(runtime) = state.get_runtime().await {
         let status = runtime.tlsforward_status().await;
@@ -157,17 +162,20 @@ pub async fn configure_tlsforward(
     _server_address: Option<String>,
 ) -> Result<String, String> {
     // Load current config
-    let mut config = state.load_config()
+    let mut config = state
+        .load_config()
         .map_err(|e| format!("Failed to load config: {}", e))?;
-    
+
     // Update TLS forward config
     // Note: This would need to be implemented based on how you want to handle
     // runtime configuration changes
-    
+
     // Save config
-    state.save_config(&config).await
+    state
+        .save_config(&config)
+        .await
         .map_err(|e| format!("Failed to save config: {}", e))?;
-    
+
     Ok("TLS forward configuration updated".to_string())
 }
 

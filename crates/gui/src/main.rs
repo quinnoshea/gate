@@ -10,8 +10,10 @@ use state::DaemonState;
 use tauri::Manager;
 
 fn main() {
-    // Initialize crypto provider
-    gate_core::crypto::init_rustls();
+    // Initialize rustls crypto provider for TLS connections
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
 
     // Initialize tracing for the GUI app
     tracing_subscriber::fmt()

@@ -1,10 +1,13 @@
 //! Admin user management routes
 
 use crate::config::Settings;
+use crate::permissions::LocalPermissionManager;
 use axum::{extract::State, response::Json};
-use core::panic;
+use gate_core::access::{
+    Action, ObjectId, ObjectIdentity, ObjectKind, Permissions, TargetNamespace,
+};
 use gate_core::types::User;
-use gate_http::{error::HttpError, middleware::auth::AuthenticatedUser, state::AppState};
+use gate_http::{error::HttpError, services::HttpIdentity, state::AppState};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::{info, instrument, warn};
@@ -90,32 +93,46 @@ pub struct UpdateUserRoleResponse {
     )
 )]
 pub async fn list_users<T>(
-    user: AuthenticatedUser,
+    identity: HttpIdentity,
     State(app_state): State<AppState<T>>,
     axum::extract::Query(query): axum::extract::Query<ListUsersQuery>,
 ) -> Result<Json<UserListResponse>, HttpError>
 where
-    T: Clone + Send + Sync + 'static + AsRef<Arc<Settings>>,
+    T: Clone + Send + Sync + 'static + AsRef<Arc<Settings>> + AsRef<Arc<LocalPermissionManager>>,
 {
-    let settings: &Arc<Settings> = app_state.data.as_ref().as_ref();
+    let permission_manager: &Arc<LocalPermissionManager> = app_state.data.as_ref().as_ref();
 
-    // Check admin role
-    // let is_admin = settings
-    //     .auth
-    //     .registration
-    //     .admin_roles
-    //     .iter()
-    //     .any(|admin_role| user.roles.contains(admin_role));
+    // Check permission to read users
+    let users_object = ObjectIdentity {
+        namespace: TargetNamespace::System,
+        kind: ObjectKind::Users,
+        id: ObjectId::new("*"),
+    };
 
-    // if !is_admin {
-    //     warn!(
-    //         "Non-admin user {} attempted to list users. User roles: {:?}, Configured admin roles: {:?}",
-    //         user.id, user.roles, settings.auth.registration.admin_roles
-    //     );
-    //     return Err(HttpError::AuthorizationFailed(
-    //         "Admin access required".to_string(),
-    //     ));
-    // }
+    let local_ctx = crate::permissions::LocalContext::from_http_identity(
+        &identity,
+        app_state.state_backend.as_ref(),
+    )
+    .await;
+
+    let local_identity = gate_core::access::SubjectIdentity::new(
+        identity.id.clone(),
+        identity.source.clone(),
+        local_ctx,
+    );
+
+    if let Err(_) = permission_manager
+        .check(&local_identity, Action::Read, &users_object)
+        .await
+    {
+        warn!(
+            "User {} attempted to list users without permission",
+            identity.id
+        );
+        return Err(HttpError::AuthorizationFailed(
+            "Permission denied: cannot list users".to_string(),
+        ));
+    }
 
     // Calculate offset
     let offset = (query.page.saturating_sub(1)) * query.page_size;
@@ -150,7 +167,7 @@ where
 
     info!(
         "Admin user {} listed {} users (page {}/{})",
-        user.id,
+        identity.id,
         users.len(),
         query.page,
         total.div_ceil(query.page_size)
@@ -185,33 +202,45 @@ where
 )]
 #[instrument(name = "get_user", skip(app_state), fields(target_user_id = %user_id))]
 pub async fn get_user<T>(
-    user: AuthenticatedUser,
+    identity: HttpIdentity,
     State(app_state): State<AppState<T>>,
     axum::extract::Path(user_id): axum::extract::Path<String>,
 ) -> Result<Json<UserInfo>, HttpError>
 where
-    T: Clone + Send + Sync + 'static + AsRef<Arc<Settings>>,
+    T: Clone + Send + Sync + 'static + AsRef<Arc<Settings>> + AsRef<Arc<LocalPermissionManager>>,
 {
-    let settings: &Arc<Settings> = app_state.data.as_ref().as_ref();
+    let permission_manager: &Arc<LocalPermissionManager> = app_state.data.as_ref().as_ref();
 
-    // Check admin role
-    panic!("todo: permission check");
-    // let is_admin = settings
-    //     .auth
-    //     .registration
-    //     .admin_roles
-    //     .iter()
-    //     .any(|admin_role| user.roles.contains(admin_role));
+    // Check permission to read specific user
+    let user_object = ObjectIdentity {
+        namespace: TargetNamespace::System,
+        kind: ObjectKind::User,
+        id: ObjectId::new(user_id.clone()),
+    };
 
-    // if !is_admin {
-    //     warn!(
-    //         "Non-admin user {} attempted to get user {}",
-    //         user.id, user_id
-    //     );
-    //     return Err(HttpError::AuthorizationFailed(
-    //         "Admin access required".to_string(),
-    //     ));
-    // }
+    let local_ctx = crate::permissions::LocalContext::from_http_identity(
+        &identity,
+        app_state.state_backend.as_ref(),
+    )
+    .await;
+    let local_identity = gate_core::access::SubjectIdentity::new(
+        identity.id.clone(),
+        identity.source.clone(),
+        local_ctx,
+    );
+
+    if let Err(_) = permission_manager
+        .check(&local_identity, Action::Read, &user_object)
+        .await
+    {
+        warn!(
+            "User {} attempted to get user {} without permission",
+            identity.id, user_id
+        );
+        return Err(HttpError::AuthorizationFailed(
+            "Permission denied: cannot read user".to_string(),
+        ));
+    }
 
     // Get user from state backend
     let target_user = app_state
@@ -223,7 +252,7 @@ where
 
     info!(
         "Admin user {} retrieved details for user {}",
-        user.id, user_id
+        identity.id, user_id
     );
 
     Ok(Json(UserInfo::from(target_user)))
@@ -259,7 +288,7 @@ where
 //     )
 // )]
 // pub async fn update_user_role<T>(
-//     user: AuthenticatedUser,
+//     identity: HttpIdentity,
 //     State(app_state): State<AppState<T>>,
 //     axum::extract::Path(user_id): axum::extract::Path<String>,
 //     Json(request): Json<UpdateUserRoleRequest>,
@@ -280,7 +309,7 @@ where
 //     if !is_admin {
 //         warn!(
 //             "Non-admin user {} attempted to update role for user {}",
-//             user.id, user_id
+//             identity.id, user_id
 //         );
 //         return Err(HttpError::AuthorizationFailed(
 //             "Admin access required".to_string(),
@@ -326,7 +355,7 @@ where
 
 //     info!(
 //         "Admin user {} updated role for user {} from '{}' to '{}'",
-//         user.id, user_id, old_role, target_user.role
+//         identity.id, user_id, old_role, target_user.role
 //     );
 
 //     Ok(Json(UpdateUserRoleResponse {
@@ -356,37 +385,49 @@ where
 )]
 #[instrument(name = "delete_user", skip(app_state), fields(target_user_id = %user_id))]
 pub async fn delete_user<T>(
-    user: AuthenticatedUser,
+    identity: HttpIdentity,
     State(app_state): State<AppState<T>>,
     axum::extract::Path(user_id): axum::extract::Path<String>,
 ) -> Result<axum::response::Response, HttpError>
 where
-    T: Clone + Send + Sync + 'static + AsRef<Arc<Settings>>,
+    T: Clone + Send + Sync + 'static + AsRef<Arc<Settings>> + AsRef<Arc<LocalPermissionManager>>,
 {
-    let settings: &Arc<Settings> = app_state.data.as_ref().as_ref();
+    let permission_manager: &Arc<LocalPermissionManager> = app_state.data.as_ref().as_ref();
 
-    panic!("todo: permission check");
-    // Check admin role
-    // let is_admin = settings
-    //     .auth
-    //     .registration
-    //     .admin_roles
-    //     .iter()
-    //     .any(|admin_role| user.roles.contains(admin_role));
+    // Check permission to delete user
+    let user_object = ObjectIdentity {
+        namespace: TargetNamespace::System,
+        kind: ObjectKind::User,
+        id: ObjectId::new(user_id.clone()),
+    };
 
-    // if !is_admin {
-    //     warn!(
-    //         "Non-admin user {} attempted to delete user {}",
-    //         user.id, user_id
-    //     );
-    //     return Err(HttpError::AuthorizationFailed(
-    //         "Admin access required".to_string(),
-    //     ));
-    // }
+    let local_ctx = crate::permissions::LocalContext::from_http_identity(
+        &identity,
+        app_state.state_backend.as_ref(),
+    )
+    .await;
+    let local_identity = gate_core::access::SubjectIdentity::new(
+        identity.id.clone(),
+        identity.source.clone(),
+        local_ctx,
+    );
+
+    if let Err(_) = permission_manager
+        .check(&local_identity, Action::Delete, &user_object)
+        .await
+    {
+        warn!(
+            "User {} attempted to delete user {} without permission",
+            identity.id, user_id
+        );
+        return Err(HttpError::AuthorizationFailed(
+            "Permission denied: cannot delete user".to_string(),
+        ));
+    }
 
     // Prevent self-deletion
-    if user.id == user_id {
-        warn!("Admin user {} attempted to delete themselves", user.id);
+    if identity.id == user_id {
+        warn!("Admin user {} attempted to delete themselves", identity.id);
         return Err(HttpError::BadRequest(
             "Cannot delete your own account".to_string(),
         ));
@@ -409,7 +450,7 @@ where
 
     info!(
         "Admin user {} deleted user {} ({})",
-        user.id,
+        identity.id,
         user_id,
         target_user.name.unwrap_or_else(|| "unnamed".to_string())
     );
@@ -423,7 +464,7 @@ where
 /// Add admin routes
 pub fn add_routes<T>(router: OpenApiRouter<AppState<T>>) -> OpenApiRouter<AppState<T>>
 where
-    T: Clone + Send + Sync + 'static + AsRef<Arc<Settings>>,
+    T: Clone + Send + Sync + 'static + AsRef<Arc<Settings>> + AsRef<Arc<LocalPermissionManager>>,
 {
     router
         .routes(routes!(list_users))

@@ -1,15 +1,13 @@
 use anyhow::Result;
 use gate_http::AppState;
 use gate_p2p::{Endpoint, NodeAddr, SecretKey, discovery::static_provider::StaticProvider};
-use gate_tlsforward::{CertificateManager, TlsForwardClient, TlsForwardHandler, TLS_FORWARD_ALPN};
+use gate_tlsforward::{CertificateManager, TLS_FORWARD_ALPN, TlsForwardClient, TlsForwardHandler};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
-use crate::{
-    services::TlsForwardService, tls_reload::ReloadableTlsAcceptor,
-};
+use crate::{services::TlsForwardService, tls_reload::ReloadableTlsAcceptor};
 
 /// Load or create P2P secret key
 pub async fn load_or_create_p2p_secret_key(path: &Path) -> Result<SecretKey> {
@@ -120,16 +118,13 @@ pub async fn setup_certificate_manager(
     data_dir: &Path,
     letsencrypt_enabled: bool,
     initial_domains: Vec<String>,
-) -> Result<(
-    Arc<ReloadableTlsAcceptor>,
-    Arc<Mutex<CertificateManager>>,
-)> {
+) -> Result<(Arc<ReloadableTlsAcceptor>, Arc<Mutex<CertificateManager>>)> {
     // Create certificate manager
     let cert_manager = Arc::new(Mutex::new(CertificateManager::new(data_dir.to_path_buf())));
 
     // Get domains for certificate
     let mut domains = initial_domains;
-    
+
     // Only add localhost if no other domains are configured
     if domains.is_empty() {
         domains.push("localhost".to_string());
@@ -158,8 +153,7 @@ pub async fn spawn_webauthn_monitor(
         while state_rx.changed().await.is_ok() {
             let state = state_rx.borrow().clone();
             if let crate::services::TlsForwardState::Connected {
-                assigned_domain,
-                ..
+                assigned_domain, ..
             } = &state
             {
                 if last_domain.as_ref() != Some(assigned_domain) {
@@ -169,7 +163,7 @@ pub async fn spawn_webauthn_monitor(
                     );
 
                     let tlsforward_origin = format!("https://{assigned_domain}");
-                    
+
                     if let Err(e) = webauthn_service
                         .add_allowed_origin(tlsforward_origin.clone())
                         .await
@@ -210,9 +204,7 @@ pub async fn request_letsencrypt_certificates(
                 Ok(()) => {
                     info!("Successfully obtained certificate for {}", domain);
                     // Reload TLS acceptor with new certificates
-                    if let Ok(new_acceptor) =
-                        cert_mgr.get_or_create_tls_acceptor(&domains).await
-                    {
+                    if let Ok(new_acceptor) = cert_mgr.get_or_create_tls_acceptor(&domains).await {
                         reloadable_acceptor.reload(new_acceptor).await;
                         info!(
                             "Reloaded TLS acceptor with new certificates for domains: {:?}",
@@ -258,18 +250,18 @@ pub async fn setup_cert_manager_client(
 /// Build complete daemon router with all routes
 pub fn build_daemon_router() -> utoipa_axum::router::OpenApiRouter<AppState<crate::ServerState>> {
     let mut router = gate_http::routes::router();
-    
+
     // Add all standard route modules
     router = gate_http::routes::dashboard::add_routes(router);
     router = gate_http::routes::inference::add_routes(router);
     router = gate_http::routes::models::add_routes(router);
     router = gate_http::routes::observability::add_routes(router);
-    
+
     // Add daemon-specific routes
     router = crate::routes::config::add_routes(router);
     router = crate::routes::auth::add_routes(router);
     router = crate::routes::admin::add_routes(router);
-    
+
     router
 }
 

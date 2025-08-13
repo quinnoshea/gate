@@ -1,6 +1,7 @@
 pub mod bootstrap;
 pub mod config;
 pub mod context;
+pub mod permissions;
 pub mod routes;
 pub mod runtime;
 pub mod server;

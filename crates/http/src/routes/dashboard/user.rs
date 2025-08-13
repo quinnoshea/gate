@@ -1,8 +1,9 @@
 //! User management endpoints
 
-use crate::{error::HttpError, middleware::auth::AuthenticatedUser, state::AppState};
+use crate::{error::HttpError, services::HttpIdentity, state::AppState};
 use axum::{Extension, extract::State, response::Json};
 use chrono::{DateTime, Utc};
+use gate_core::access::IdentityContext;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 use utoipa::ToSchema;
@@ -44,11 +45,11 @@ pub struct UserStats {
     name = "get_current_user",
     skip(_app_state),
     fields(
-        user_id = %user.id
+        user_id = %identity.id
     )
 )]
 pub async fn get_current_user<T>(
-    Extension(user): Extension<AuthenticatedUser>,
+    Extension(identity): Extension<HttpIdentity>,
     State(_app_state): State<AppState<T>>,
 ) -> Result<Json<DashboardUser>, HttpError>
 where
@@ -57,8 +58,8 @@ where
     // For now, we'll return a simple representation based on the authenticated user
     // In a real implementation, this would fetch additional details from the database
     let dashboard_user = DashboardUser {
-        id: user.id.clone(),
-        email: user.email.clone(),
+        id: identity.id.clone(),
+        email: identity.context.get("email").map(|s| s.to_string()),
         created_at: Utc::now(), // Placeholder - should come from database
     };
 
@@ -80,12 +81,12 @@ where
     name = "get_user_stats",
     skip(app_state),
     fields(
-        user_id = %user.id,
+        user_id = %identity.id,
         api_keys_count = tracing::field::Empty
     )
 )]
 pub async fn get_user_stats<T>(
-    Extension(user): Extension<AuthenticatedUser>,
+    Extension(identity): Extension<HttpIdentity>,
     State(app_state): State<AppState<T>>,
 ) -> Result<Json<UserStats>, HttpError>
 where
@@ -94,7 +95,7 @@ where
     // Count the user's API keys
     let api_keys = app_state
         .state_backend
-        .list_api_keys(&user.id)
+        .list_api_keys(&identity.id)
         .await
         .map_err(|e| HttpError::InternalServerError(e.to_string()))?;
 
