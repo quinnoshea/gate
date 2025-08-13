@@ -32,6 +32,10 @@ mod tests {
             .execute(backend.pool())
             .await
             .unwrap();
+        sqlx::query(include_str!("../migrations/0002_webauthn_schema.sql"))
+            .execute(backend.pool())
+            .await
+            .unwrap();
 
         backend
     }

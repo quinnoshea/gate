@@ -386,4 +386,77 @@ impl Settings {
         let config = builder.build()?;
         config.try_deserialize()
     }
+    
+    /// Configuration preset optimized for GUI mode
+    pub fn gui_preset() -> Self {
+        let mut settings = Self::default();
+        
+        // Enable local inference for GUI
+        settings.local_inference = Some(LocalInferenceConfig {
+            enabled: true,
+            max_concurrent_inferences: 1,
+            default_temperature: 0.7,
+            default_max_tokens: 1024,
+        });
+        
+        // Configure WebAuthn for private.hellas.ai domain
+        settings.auth.webauthn = WebAuthnConfig {
+            enabled: true,
+            rp_id: "private.hellas.ai".to_string(),
+            rp_name: "Gate Private Node".to_string(),
+            rp_origin: "https://private.hellas.ai".to_string(),
+            allowed_origins: vec!["https://private.hellas.ai".to_string()],
+            allow_subdomains: true,
+            allow_tlsforward_origins: true,
+            require_user_verification: false,
+            session_timeout_seconds: 86400, // 24 hours
+        };
+        
+        // Set appropriate server defaults for GUI
+        settings.server.host = "127.0.0.1".to_string();
+        settings.server.port = 14242;
+        
+        settings
+    }
+    
+    /// Configuration preset for standalone daemon mode
+    pub fn daemon_preset() -> Self {
+        let mut settings = Self::default();
+        
+        // Standalone daemon typically doesn't need local inference by default
+        settings.local_inference = None;
+        
+        // More permissive server binding for daemon
+        settings.server.host = "0.0.0.0".to_string();
+        settings.server.port = 14242;
+        
+        // Enable metrics by default for daemon
+        settings.server.metrics_port = Some(9090);
+        
+        settings
+    }
+    
+    /// Apply GUI-specific overrides to existing settings
+    pub fn apply_gui_overrides(&mut self) {
+        // Always enable local inference for GUI
+        if self.local_inference.is_none() {
+            self.local_inference = Some(LocalInferenceConfig {
+                enabled: true,
+                max_concurrent_inferences: 1,
+                default_temperature: 0.7,
+                default_max_tokens: 1024,
+            });
+        }
+        
+        // Ensure WebAuthn is properly configured for TLS forward
+        if self.auth.webauthn.enabled {
+            self.auth.webauthn.allow_tlsforward_origins = true;
+            if !self.auth.webauthn.allowed_origins.contains(&"https://private.hellas.ai".to_string()) {
+                self.auth.webauthn.allowed_origins.push("https://private.hellas.ai".to_string());
+            }
+        }
+        
+        // GUI should only bind to localhost
+        self.server.host = "127.0.0.1".to_string();
+    }
 }

@@ -3,7 +3,7 @@
 use crate::forwarding::UpstreamRegistry;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::middleware::webauthn::WebAuthnState;
-use gate_core::{InferenceBackend, RequestContext, StateBackend, WebAuthnBackend};
+use gate_core::{InferenceBackend, StateBackend, WebAuthnBackend};
 use std::sync::Arc;
 
 /// Shared application state
@@ -13,8 +13,6 @@ use std::sync::Arc;
 /// the use of a generic type parameter.
 #[derive(Clone)]
 pub struct AppState<T = ()> {
-    /// Request context for platform-specific operations
-    // pub context: Arc<dyn RequestContext>,
     /// State backend for data persistence
     pub state_backend: Arc<dyn StateBackend>,
     /// WebAuthn backend for credential storage

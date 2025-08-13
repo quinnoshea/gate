@@ -32,16 +32,16 @@ pub struct JwtConfig {
     pub issuer: String,
 }
 
-// impl Default for JwtConfig {
-//     fn default() -> Self {
-//         Self {
-//             secret: std::env::var("JWT_SECRET")
-//                 .unwrap_or_else(|_| "your-secret-key-change-this-in-production".to_string()),
-//             expiration: Duration::hours(24),
-//             issuer: "gate-server".to_string(),
-//         }
-//     }
-// }
+impl JwtConfig {
+    /// Default configuration with 24 hours expiration
+    pub fn new(secret: String, expiration_hours: i64, issuer: String) -> Self {
+        Self {
+            secret,
+            expiration: Duration::hours(expiration_hours),
+            issuer,
+        }
+    }
+}
 
 /// JWT service for token operations
 pub struct JwtService {
@@ -64,11 +64,7 @@ impl JwtService {
     }
 
     /// Generate a JWT token for a user
-    pub fn generate_token(
-        &self,
-        user_id: &str,
-        name: Option<&str>,
-    ) -> Result<String, HttpError> {
+    pub fn generate_token(&self, user_id: &str, name: Option<&str>) -> Result<String, HttpError> {
         let now = Utc::now();
         let expiration = now + self.config.expiration;
 
@@ -127,15 +123,13 @@ mod tests {
 
     #[test]
     fn test_token_generation_and_validation() {
-        let config = JwtConfig::default();
+        let config = JwtConfig::new("test-secret".to_string(), 24, "test-issuer".to_string());
         let service = JwtService::new(config);
         let user_id = "test-user-123";
         let name = Some("Test User");
 
         // Generate token
-        let token = service
-            .generate_token(user_id, name, vec!["admin".to_string()])
-            .unwrap();
+        let token = service.generate_token(user_id, name).unwrap();
         assert!(!token.is_empty());
 
         // Validate token
@@ -146,7 +140,8 @@ mod tests {
 
     #[test]
     fn test_expired_token() {
-        let service = JwtService::new(JwtConfig::default());
+        let config = JwtConfig::new("test-secret".to_string(), 24, "test-issuer".to_string());
+        let service = JwtService::new(config);
 
         // Create a token with expired timestamp directly
         let now = Utc::now();
@@ -158,7 +153,6 @@ mod tests {
             exp: expired_time.timestamp(),
             iat: expired_time.timestamp(),
             iss: service.config.issuer.clone(),
-            roles: vec!["user".to_string()],
         };
 
         let header = Header::new(Algorithm::HS256);
@@ -175,7 +169,8 @@ mod tests {
 
     #[test]
     fn test_extract_bearer_token() {
-        let service = JwtService::new(JwtConfig::default());
+        let config = JwtConfig::new("test-secret".to_string(), 24, "test-issuer".to_string());
+        let service = JwtService::new(config);
 
         assert_eq!(
             service.extract_bearer_token("Bearer abc123").unwrap(),

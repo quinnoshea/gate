@@ -680,7 +680,7 @@ async fn run_daemon_server(
     // In GUI crate, we're ALWAYS in a Tauri app - either dev mode or built
     let static_dir = if tauri::is_dev() {
         // Development mode - use the source directory
-        let dev_path = "crates/frontend-daemon/dist";
+        let dev_path = std::env::var("GATE_SERVER__STATIC_DIR").unwrap_or("crates/frontend-daemon/dist".to_string(d));
         info!(
             "Running in Tauri dev mode, using development path: {}",
             dev_path

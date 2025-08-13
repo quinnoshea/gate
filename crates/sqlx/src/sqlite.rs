@@ -59,11 +59,6 @@ mod tests {
             .await
             .unwrap();
 
-        sqlx::query(include_str!("../migrations/0003_add_user_roles.sql"))
-            .execute(&pool)
-            .await
-            .unwrap();
-
         SqliteStateBackend::from_pool(pool)
     }
 

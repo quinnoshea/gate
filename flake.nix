@@ -30,22 +30,14 @@
         };
         
         # Create filtered source for Rust builds
-        # This prevents non-code changes from triggering rebuilds
         filteredSource = pkgs.lib.fileset.toSource {
           root = ./.;
           fileset = pkgs.lib.fileset.unions [
-            # Include all Rust source files
+            (pkgs.lib.fileset.fileFilter (file: file.name == "Cargo.toml" || file.name == "build.rs")  ./crates)
             (pkgs.lib.fileset.fileFilter (file: pkgs.lib.hasSuffix ".rs" file.name) ./.)
-            # Include Cargo files
             ./Cargo.toml
             ./Cargo.lock
-            # Include crates directory structure with Cargo.toml files
-            (pkgs.lib.fileset.fileFilter 
-              (file: file.name == "Cargo.toml" || file.name == "build.rs") 
-              ./crates)
-            # Include rust-toolchain for build compatibility
             ./rust-toolchain.toml
-            # Include SQL migrations needed by sqlx
             ./crates/sqlx/migrations
           ];
         };
@@ -109,32 +101,22 @@
         formatter = pkgs.nixpkgs-fmt;
 
         devShells.default = pkgs.mkShell {
-
-          # Build inputs needed for development
-          # Based on what gate-daemon and gate-frontend-daemon require
           nativeBuildInputs = with pkgs; [
-            # Essential build tools
-            pkg-config
-            openssl
             
-            # Frontend build tools
             trunk
+            pkg-config
             wasm-bindgen-cli
             nodePackages.tailwindcss
           ];
 
           buildInputs = with pkgs; [
-            # Rust toolchain with wasm and native targets
             rustToolchain
-
-            # Core dependencies
             openssl
             protobuf
             clang
           ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
             mold
-            # Linux GUI dependencies (needed by gate-daemon)
-            libsoup_3
+            # libsoup_3
             pango
             gdk-pixbuf
             atk
@@ -195,9 +177,7 @@
             libappindicator-gtk3
           ] ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
             # macOS-specific dependencies
-            darwin.apple_sdk.frameworks.WebKit
-            darwin.apple_sdk.frameworks.AppKit
-            darwin.apple_sdk.frameworks.CoreServices
+            # darwin.apple_sdk.
           ];
 
           RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";

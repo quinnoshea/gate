@@ -415,7 +415,7 @@ mod tests {
             },
             auth: daemon_config::AuthConfig {
                 jwt: daemon_config::JwtConfig {
-                    secret: Some("test-secret".to_string()),
+                    secret: "test-secret".to_string(),
                     expiration_hours: 24,
                     issuer: "gate-test".to_string(),
                 },
@@ -432,9 +432,6 @@ mod tests {
                 },
                 registration: daemon_config::RegistrationConfig {
                     allow_open_registration: true,
-                    default_user_role: "user".to_string(),
-                    admin_roles: vec!["admin".to_string()],
-                    bootstrap_admin_role: "admin".to_string(),
                 },
             },
             upstreams: vec![],

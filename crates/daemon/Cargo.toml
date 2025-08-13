@@ -39,8 +39,7 @@ gate-sqlx.workspace = true
 hex = "0.4"
 hyper-util = { workspace = true, default-features = false }
 iroh.workspace = true
-rand = "0.8"
-rustls = { version = "0.23", default-features = false, features = ["ring"] }
+rand = { workspace = true }
 serde.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["full"] }

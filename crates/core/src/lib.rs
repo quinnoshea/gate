@@ -1,5 +1,6 @@
 pub mod bootstrap;
 pub mod context;
+pub mod crypto;
 pub mod errors;
 pub mod inference;
 pub mod prelude;

@@ -10,7 +10,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 /// Test suite for StateBackend implementations
 pub struct StateBackendTestSuite<B: StateBackend> {
@@ -258,7 +258,6 @@ pub mod fixtures {
         User {
             id: id.unwrap_or_else(|| format!("user-{}", uuid::Uuid::new_v4())),
             name: Some("Test User".to_string()),
-            role: "user".to_string(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
             metadata,
@@ -357,21 +356,10 @@ impl StateBackend for InMemoryBackend {
         Ok(())
     }
 
-    async fn list_users(&self, filter: Option<&str>) -> Result<Vec<User>> {
-        let users = self.users.lock().unwrap();
-        let mut result: Vec<User> = if let Some(role_filter) = filter {
-            users
-                .values()
-                .filter(|u| u.role == role_filter)
-                .cloned()
-                .collect()
-        } else {
-            users.values().cloned().collect()
-        };
-
-        // Sort by created_at descending to match SQL behavior
-        result.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-        Ok(result)
+    async fn list_users(&self) -> Result<Vec<User>> {
+        let mut results: Vec<_> = self.users.lock().unwrap().values().cloned().collect();
+        results.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        Ok(results)
     }
 
     async fn get_api_key(&self, key_hash: &str) -> Result<Option<ApiKey>> {
