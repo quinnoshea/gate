@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use gate_core::{BootstrapTokenValidator, WebAuthnBackend};
-use rand::{Rng, distr::Alphanumeric};
+use rand::{Rng, distributions::Alphanumeric};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
