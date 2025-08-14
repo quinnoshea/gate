@@ -116,6 +116,7 @@ jobs:
       shell: cmd
       run: |
         vcpkg install openssl:x64-windows-static
+        vcpkg install openssl:x64-windows-static-md
         vcpkg integrate install
     
     # Build frontends and GUI
