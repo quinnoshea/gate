@@ -44,6 +44,8 @@ jobs:
             target: x86_64-apple-darwin
           - os: macos-latest
             target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
     steps:
     - uses: actions/checkout@v4
     
@@ -67,6 +69,7 @@ jobs:
     
     # Install build tools
     - name: Install build tools
+      shell: bash
       run: |
         # Check if trunk is already installed
         if ! command -v trunk &> /dev/null; then
@@ -86,16 +89,19 @@ jobs:
     
     # Install tailwindcss standalone CLI
     - name: Install tailwindcss
+      shell: bash
       run: |
         # Map runner OS and arch to tailwind binary names
         case "${{ runner.os }}-${{ runner.arch }}" in
-          "Linux-X64") BINARY="tailwindcss-linux-x64" ;;
-          "macOS-X64") BINARY="tailwindcss-macos-x64" ;;
-          "macOS-ARM64") BINARY="tailwindcss-macos-arm64" ;;
+          "Linux-X64") BINARY="tailwindcss-linux-x64"; DEST="/usr/local/bin/tailwindcss" ;;
+          "macOS-X64") BINARY="tailwindcss-macos-x64"; DEST="/usr/local/bin/tailwindcss" ;;
+          "macOS-ARM64") BINARY="tailwindcss-macos-arm64"; DEST="/usr/local/bin/tailwindcss" ;;
+          "Windows-X64") BINARY="tailwindcss-windows-x64.exe"; DEST="$HOME/.cargo/bin/tailwindcss.exe" ;;
         esac
         
-        curl -sL "https://github.com/tailwindlabs/tailwindcss/releases/download/v4.1.11/${BINARY}" -o /usr/local/bin/tailwindcss
-        chmod +x /usr/local/bin/tailwindcss
+        echo "Installing $BINARY to $DEST"
+        curl -sL "https://github.com/tailwindlabs/tailwindcss/releases/download/v4.1.11/${BINARY}" -o "$DEST"
+        chmod +x "$DEST"
     
     # Linux-specific dependencies
     - name: Install Linux dependencies
@@ -109,6 +115,7 @@ jobs:
       run: cd crates/gui && cargo tauri build
     
     - name: Find and prepare artifacts
+      shell: bash
       run: |
         mkdir -p artifacts
         
@@ -126,6 +133,12 @@ jobs:
             echo "Found Linux bundles"
             cp -r target/release/bundle/deb/*.deb artifacts/ 2>/dev/null || true
             cp -r target/release/bundle/appimage/*.AppImage artifacts/ 2>/dev/null || true
+          fi
+        elif [[ "${{ runner.os }}" == "Windows" ]]; then
+          # Windows: Look for MSI files
+          if [[ -d "target/release/bundle" ]]; then
+            echo "Found Windows bundles"
+            cp -r target/release/bundle/msi/*.msi artifacts/ 2>/dev/null || true
           fi
         fi
         
