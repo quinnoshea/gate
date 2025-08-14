@@ -49,7 +49,7 @@ fn generate_random_secret() -> String {
     use rand::Rng;
     let mut rng = rand::thread_rng();
     let secret: String = (0..32)
-        .map(|_| rng.sample(rand::distributions::Alphanumeric) as char)
+        .map(|_| rng.sample(rand::distr::Alphanumeric) as char)
         .collect();
     secret
 }

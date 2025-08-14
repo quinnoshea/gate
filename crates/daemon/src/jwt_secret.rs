@@ -3,7 +3,7 @@
 //! This module handles secure generation and persistence of JWT signing secrets.
 
 use anyhow::{Context, Result};
-use rand::{Rng, distributions::Alphanumeric};
+use rand::{Rng, distr::Alphanumeric};
 use std::path::Path;
 use tokio::fs;
 use tracing::{debug, info};
