@@ -9,7 +9,15 @@ pub struct User {
     pub name: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub disabled_at: Option<DateTime<Utc>>,
     pub metadata: HashMap<String, String>,
+}
+
+impl User {
+    /// Check if the user is enabled (disabled_at is None)
+    pub fn is_enabled(&self) -> bool {
+        self.disabled_at.is_none()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,4 +1,4 @@
-use crate::components::{ConfigEditor, UserManagement};
+use crate::components::{ConfigEditor, UserManagementContainer};
 use crate::local_auth::LocalAuth;
 use gate_frontend_common::{
     auth::{use_auth, use_is_authenticated, AuthAction, AuthProvider},
@@ -162,11 +162,11 @@ fn local_app_content() -> Html {
                 </div>
 
                 // Tab content
-                <div class="flex-1 overflow-hidden">
+                <div class="flex-1 overflow-y-auto">
                     {match *active_tab {
                         Tab::Chat => html! { <LiveChat /> },
                         Tab::Config => html! { <ConfigEditor /> },
-                        Tab::Users => html! { <UserManagement /> },
+                        Tab::Users => html! { <UserManagementContainer /> },
                     }}
                 </div>
             </div>

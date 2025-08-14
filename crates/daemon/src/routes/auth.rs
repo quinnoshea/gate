@@ -157,6 +157,7 @@ where
         name: Some(user_name.clone()),
         created_at: Utc::now(),
         updated_at: Utc::now(),
+        disabled_at: None,
         metadata: std::collections::HashMap::new(),
     };
 

@@ -47,6 +47,7 @@ impl<B: StateBackend> StateBackendTestSuite<B> {
             name: Some("Test User".to_string()),
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            disabled_at: None,
             metadata: metadata.clone(),
         };
 
@@ -261,6 +262,7 @@ pub mod fixtures {
             name: Some("Test User".to_string()),
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            disabled_at: None,
             metadata,
         }
     }
@@ -495,6 +497,14 @@ impl StateBackend for InMemoryBackend {
     ) -> Result<()> {
         // For tests, just return Ok
         Ok(())
+    }
+
+    async fn list_user_permissions(
+        &self,
+        _user_id: &str,
+    ) -> Result<Vec<(String, String, chrono::DateTime<chrono::Utc>)>> {
+        // For tests, return empty list
+        Ok(Vec::new())
     }
 }
 
