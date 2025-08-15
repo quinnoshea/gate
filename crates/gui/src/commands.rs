@@ -1,5 +1,6 @@
 use crate::state::{DaemonState, TlsForwardStatus};
-use gate_daemon::{Settings, runtime::Runtime};
+use gate_core::bootstrap::BootstrapTokenParser;
+use gate_daemon::{Settings, runtime::Runtime, StateDir};
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Manager, State};
 use tracing::{error, info};
@@ -220,5 +221,36 @@ pub async fn get_bootstrap_token(state: State<'_, DaemonState>) -> Result<Option
         Ok(runtime.bootstrap_token().map(|s| s.to_string()))
     } else {
         Ok(None)
+    }
+}
+
+/// Get bootstrap token by parsing log files for automated discovery
+/// 
+/// This command searches through gate daemon log files to find the most recent
+/// bootstrap token, enabling automated bootstrap token discovery instead of
+/// manual entry. Returns None if no token is found in the logs.
+#[tauri::command]
+pub async fn get_bootstrap_token_from_logs() -> Result<Option<String>, String> {
+    let state_dir = StateDir::new();
+    let logs_dir = state_dir.data_dir().join("logs");
+    
+    // Create parser instance
+    let parser = BootstrapTokenParser::new(logs_dir)
+        .map_err(|e| format!("Failed to initialize bootstrap token parser: {}", e))?;
+    
+    // Search for the latest token in log files
+    match parser.find_latest_token().await {
+        Ok(token) => {
+            if let Some(ref token_str) = token {
+                info!("Successfully found bootstrap token from logs: {}", token_str);
+            } else {
+                info!("No bootstrap token found in log files");
+            }
+            Ok(token)
+        }
+        Err(e) => {
+            error!("Failed to parse bootstrap token from logs: {}", e);
+            Err(format!("Bootstrap token parsing failed: {}", e))
+        }
     }
 }
