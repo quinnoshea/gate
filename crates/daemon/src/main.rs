@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::Parser;
 use gate_core::tracing::init::init_file_logging;
-use gate_daemon::{Settings, runtime::Runtime, StateDir};
+use gate_daemon::{Settings, StateDir, runtime::Runtime};
 use tracing::info;
 
 /// Gate daemon - High-performance AI gateway
@@ -30,7 +30,7 @@ async fn main() -> Result<()> {
     let state_dir = StateDir::new();
     let data_dir = state_dir.data_dir();
     let _log_guard = init_file_logging(&data_dir, None)?;
-    
+
     info!(
         "Gate daemon starting - version: {}, logs: {}/logs/",
         env!("CARGO_PKG_VERSION"),
