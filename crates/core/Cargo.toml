@@ -12,7 +12,7 @@ categories.workspace = true
 default = []
 cloudflare = ["dep:worker", "dep:sqlx-d1"]
 tests = ["dep:uuid"]
-tracing = ["dep:tracing", "dep:base64", "dep:hex", "dep:getrandom", "dep:lazy_static"]
+tracing = ["dep:tracing", "dep:base64", "dep:hex", "dep:getrandom", "dep:lazy_static", "dep:tracing-appender"]
 tracing-otlp = ["tracing", "dep:opentelemetry", "dep:opentelemetry-otlp", "dep:opentelemetry_sdk", "dep:tracing-opentelemetry", "dep:tracing-subscriber"]
 tracing-prometheus = ["tracing"]
 
@@ -21,14 +21,16 @@ anyhow.workspace = true
 async-trait.workspace = true
 chrono.workspace = true
 config.workspace = true
+dirs = "5.0"
 futures.workspace = true
 http.workspace = true
+regex = "1.10"
 rust_decimal = { version = "1.0", features = ["serde"] }
 serde.workspace = true
 serde_json.workspace = true
 sqlx-d1 = { version = "0.2.0", optional = true }
 thiserror.workspace = true
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, features = ["sync", "fs", "io-util"] }
 url.workspace = true
 uuid = { workspace = true, features = ["v4"], optional = true }
 
@@ -40,6 +42,7 @@ tracing = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
 lazy_static = { version = "1.4", optional = true }
+tracing-appender = { version = "0.2", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { workspace = true, features = ["wasm_js"], optional = true }
@@ -56,3 +59,4 @@ tracing-subscriber = { workspace = true, optional = true }
 mockall.workspace = true
 tokio = { workspace = true, features = ["test-util", "macros", "rt-multi-thread"] }
 uuid = { workspace = true, features = ["v4"] }
+tempfile = "3.0"

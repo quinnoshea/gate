@@ -17,6 +17,9 @@ pub mod config;
 #[cfg(all(feature = "tracing-otlp", not(target_arch = "wasm32")))]
 pub mod init;
 
+#[cfg(all(feature = "tracing", not(target_arch = "wasm32")))]
+pub mod file_rotation;
+
 #[cfg(all(feature = "tracing-prometheus", not(target_arch = "wasm32")))]
 pub mod prometheus;
 
