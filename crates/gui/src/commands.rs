@@ -254,3 +254,39 @@ pub async fn get_bootstrap_token_from_logs() -> Result<Option<String>, String> {
         }
     }
 }
+
+/// Opens the daemon URL in the default browser.
+/// 
+/// This command gets the current daemon address and opens it in the user's default browser.
+/// If the daemon is not running, returns an error. Uses the opener crate for cross-platform
+/// browser launching.
+/// 
+/// Returns a success message if the browser was opened successfully.
+#[tauri::command]
+pub async fn open_daemon_in_browser(
+    state: State<'_, DaemonState>
+) -> Result<String, String> {
+    // Check if daemon is running
+    if !state.is_running().await {
+        return Err("Daemon is not running".to_string());
+    }
+    
+    // Get runtime to access server address
+    let runtime = state.get_runtime().await
+        .ok_or("Runtime not available")?;
+    
+    let address = runtime.server_address();
+    let url = format!("http://{}", address);
+    
+    // Open URL in default browser using opener crate
+    match opener::open(&url) {
+        Ok(()) => {
+            info!("Successfully opened daemon URL in browser: {}", url);
+            Ok(format!("Opened {} in default browser", url))
+        }
+        Err(e) => {
+            error!("Failed to open daemon URL in browser: {}", e);
+            Err(format!("Failed to open browser: {}", e))
+        }
+    }
+}

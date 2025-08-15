@@ -24,6 +24,7 @@ serde_json = { workspace = true }
 hex = "0.4"
 rand = { workspace = true }
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
+opener = "0.7"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

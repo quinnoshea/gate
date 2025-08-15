@@ -48,6 +48,7 @@ fn main() {
             commands::get_bootstrap_url,
             commands::get_bootstrap_token,
             commands::get_bootstrap_token_from_logs,
+            commands::open_daemon_in_browser,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
