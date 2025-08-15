@@ -1,4 +1,5 @@
 use crate::state::{DaemonState, TlsForwardStatus};
+#[cfg(not(target_arch = "wasm32"))]
 use gate_core::bootstrap::BootstrapTokenParser;
 use gate_daemon::{Settings, StateDir, runtime::Runtime};
 use tauri::path::BaseDirectory;
@@ -229,12 +230,14 @@ pub async fn get_bootstrap_token(state: State<'_, DaemonState>) -> Result<Option
 /// This command searches through gate daemon log files to find the most recent
 /// bootstrap token, enabling automated bootstrap token discovery instead of
 /// manual entry. Returns None if no token is found in the logs.
+#[cfg(not(target_arch = "wasm32"))]
 #[tauri::command]
 pub async fn get_bootstrap_token_from_logs() -> Result<Option<String>, String> {
     get_bootstrap_token_from_logs_impl(None).await
 }
 
 /// Implementation function that allows overriding StateDir for testing
+#[cfg(not(target_arch = "wasm32"))]
 async fn get_bootstrap_token_from_logs_impl(
     state_dir_override: Option<StateDir>,
 ) -> Result<Option<String>, String> {
@@ -301,12 +304,17 @@ pub async fn open_daemon_in_browser(state: State<'_, DaemonState>) -> Result<Str
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(not(target_arch = "wasm32"))]
     use std::path::PathBuf;
+    #[cfg(not(target_arch = "wasm32"))]
     use tempfile::TempDir;
+    #[cfg(not(target_arch = "wasm32"))]
     use tokio::fs::File;
+    #[cfg(not(target_arch = "wasm32"))]
     use tokio::io::AsyncWriteExt;
 
     /// Test helper to create a mock state directory with test log files
+    #[cfg(not(target_arch = "wasm32"))]
     async fn create_test_logs_with_token(temp_dir: &TempDir, token: &str) -> PathBuf {
         // StateDir::with_override expects data/logs structure
         let data_dir = temp_dir.path().join("data");
@@ -328,6 +336,7 @@ mod tests {
     }
 
     /// Test helper to create empty logs directory
+    #[cfg(not(target_arch = "wasm32"))]
     async fn create_empty_logs(temp_dir: &TempDir) -> PathBuf {
         let data_dir = temp_dir.path().join("data");
         let logs_dir = data_dir.join("logs");
@@ -336,11 +345,13 @@ mod tests {
     }
 
     /// Test helper to call get_bootstrap_token_from_logs with a test directory
+    #[cfg(not(target_arch = "wasm32"))]
     async fn call_with_test_dir(temp_dir: &TempDir) -> Result<Option<String>, String> {
         let state_dir = StateDir::with_override(temp_dir.path());
         get_bootstrap_token_from_logs_impl(Some(state_dir)).await
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn test_get_bootstrap_token_from_logs_success() {
         let temp_dir = TempDir::new().unwrap();
@@ -363,6 +374,7 @@ mod tests {
         );
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn test_get_bootstrap_token_from_logs_no_token() {
         let temp_dir = TempDir::new().unwrap();
@@ -379,6 +391,7 @@ mod tests {
         assert!(token.is_none(), "Should not find a token in empty logs");
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn test_get_bootstrap_token_from_logs_no_logs_directory() {
         let temp_dir = TempDir::new().unwrap();
@@ -400,6 +413,7 @@ mod tests {
         );
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn test_get_bootstrap_token_from_logs_with_log_file_without_token() {
         let temp_dir = TempDir::new().unwrap();
@@ -430,6 +444,7 @@ mod tests {
         );
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn test_get_bootstrap_token_from_logs_multiple_tokens_returns_latest() {
         let temp_dir = TempDir::new().unwrap();
@@ -469,6 +484,7 @@ mod tests {
         );
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn test_get_bootstrap_token_from_logs_error_handling() {
         let temp_dir = TempDir::new().unwrap();

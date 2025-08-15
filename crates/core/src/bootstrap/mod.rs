@@ -5,8 +5,10 @@
 
 use async_trait::async_trait;
 
+#[cfg(not(target_arch = "wasm32"))]
 pub mod parser;
 
+#[cfg(not(target_arch = "wasm32"))]
 pub use parser::BootstrapTokenParser;
 
 /// Trait for managing bootstrap tokens for initial user enrollment

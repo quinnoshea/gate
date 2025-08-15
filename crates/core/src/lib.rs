@@ -15,7 +15,9 @@ pub mod tracing;
 #[cfg(any(test, feature = "tests"))]
 pub mod tests;
 
-pub use bootstrap::{BootstrapTokenParser, BootstrapTokenValidator};
+#[cfg(not(target_arch = "wasm32"))]
+pub use bootstrap::BootstrapTokenParser;
+pub use bootstrap::BootstrapTokenValidator;
 pub use context::RequestContext;
 pub use errors::{Error, Result};
 pub use inference::InferenceBackend;
