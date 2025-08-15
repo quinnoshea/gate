@@ -116,8 +116,10 @@ impl BootstrapTokenParser {
 
             // Check if this looks like a gate log file
             if let Some(file_name) = path.file_name().and_then(|n| n.to_str())
-                && file_name.starts_with("gate") && file_name.ends_with(".log") {
-                    files.push(entry);
+                && file_name.starts_with("gate")
+                && file_name.ends_with(".log")
+            {
+                files.push(entry);
             }
         }
 
@@ -170,11 +172,12 @@ impl BootstrapTokenParser {
 
                 while let Some(line) = lines.next_line().await? {
                     if let Some(captures) = self.token_pattern.captures(&line)
-                        && let Some(token_match) = captures.get(1) {
-                            let token = token_match.as_str().trim().to_string();
-                            if !token.is_empty() && token.len() >= 15 {
-                                results.push((token, line.clone(), path.clone()));
-                            }
+                        && let Some(token_match) = captures.get(1)
+                    {
+                        let token = token_match.as_str().trim().to_string();
+                        if !token.is_empty() && token.len() >= 15 {
+                            results.push((token, line.clone(), path.clone()));
+                        }
                     }
                 }
             }
