@@ -141,32 +141,29 @@ pub fn shutdown_tracer_provider() {
 }
 
 /// Initialize file-based logging with size rotation
-/// 
+///
 /// This function initializes tracing to write logs to files using the SizeBasedAppender
 /// from PR #1 and LogFileConfig from PR #2. It returns a WorkerGuard that must be kept
 /// alive to prevent the background writer thread from being dropped.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `state_dir` - Base directory for application state (logs will go in logs/ subdirectory)
 /// * `config` - Configuration for file logging (uses default if None)
-/// 
+///
 /// # Returns
-/// 
+///
 /// * `Result<WorkerGuard>` - Guard that must be kept alive for logging to work
-/// 
+///
 /// # Example
-/// 
+///
 /// ```rust,ignore
 /// let state_dir = StateDir::new();
 /// let _guard = init_file_logging(state_dir.data_dir(), None)?;
 /// // Guard must be kept alive for the lifetime of logging
 /// ```
 #[cfg(all(feature = "tracing", not(target_arch = "wasm32")))]
-pub fn init_file_logging(
-    state_dir: &Path,
-    config: Option<LogFileConfig>,
-) -> Result<WorkerGuard> {
+pub fn init_file_logging(state_dir: &Path, config: Option<LogFileConfig>) -> Result<WorkerGuard> {
     // Use provided config or create default with state_dir
     let log_config = config.unwrap_or_else(|| LogFileConfig {
         directory: state_dir.join("logs"),
@@ -194,8 +191,7 @@ pub fn init_file_logging(
     let (non_blocking, guard) = tracing_appender::non_blocking(appender);
 
     // Create environment filter
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     // Create file layer
     let file_layer = tracing_subscriber::fmt::layer()
@@ -220,7 +216,7 @@ pub fn init_file_logging(
             .with_target(true)
             .with_thread_ids(true)
             .with_thread_names(true);
-        
+
         subscriber.with(console_layer).init();
     } else {
         subscriber.init();
@@ -251,7 +247,7 @@ pub fn init_file_logging(
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_init_tracing_default() {
         let config = InstrumentationConfig::default();
@@ -272,29 +268,29 @@ mod tests {
     #[test]
     fn test_file_logging_init() {
         use tempfile::TempDir;
-        
+
         let temp_dir = TempDir::new().unwrap();
         let state_dir = temp_dir.path();
-        
+
         // Test with default config
         let result = init_file_logging(state_dir, None);
-        
+
         // We can't test the actual initialization since tracing is global state
         // but we can test that the function creates the necessary directories
         let logs_dir = state_dir.join("logs");
         assert!(logs_dir.exists(), "Logs directory should be created");
-        
+
         // The function should succeed
         // Note: In a real environment this would fail due to global tracing state
         // but the directory creation and config processing should work
         match result {
             Ok(_guard) => {
                 // Success - logging was initialized
-            },
+            }
             Err(e) => {
                 // Expected in tests due to global tracing state conflicts
                 // The important thing is that directories were created
-                println!("Expected error due to global tracing state: {}", e);
+                println!("Expected error due to global tracing state: {e}");
             }
         }
     }
@@ -303,10 +299,10 @@ mod tests {
     #[test]
     fn test_file_logging_config_validation() {
         use tempfile::TempDir;
-        
+
         let temp_dir = TempDir::new().unwrap();
         let state_dir = temp_dir.path();
-        
+
         let custom_config = LogFileConfig {
             directory: state_dir.join("custom-logs"),
             file_prefix: "test".to_string(),
@@ -314,7 +310,7 @@ mod tests {
             max_files: 15,
             console_enabled: true,
         };
-        
+
         // Test config creation and validation without global state conflicts
         // We can test the config processing logic by creating the appender directly
         let appender_result = SizeBasedAppender::new(
@@ -323,13 +319,19 @@ mod tests {
             custom_config.max_file_size_mb,
             custom_config.max_files,
         );
-        
+
         // Check that custom directory was created
-        assert!(custom_config.directory.exists(), "Custom logs directory should be created");
-        
+        assert!(
+            custom_config.directory.exists(),
+            "Custom logs directory should be created"
+        );
+
         // Appender creation should succeed
-        assert!(appender_result.is_ok(), "SizeBasedAppender creation should succeed");
-        
+        assert!(
+            appender_result.is_ok(),
+            "SizeBasedAppender creation should succeed"
+        );
+
         // Test config values
         assert_eq!(custom_config.file_prefix, "test");
         assert_eq!(custom_config.max_file_size_mb, 5);
@@ -341,9 +343,9 @@ mod tests {
     #[test]
     fn test_file_logging_wasm_stub() {
         use std::path::PathBuf;
-        
+
         let result = init_file_logging(&PathBuf::from("/tmp"), None);
-        
+
         // Should always succeed but do nothing
         assert!(result.is_ok());
     }
