@@ -221,6 +221,13 @@ pub async fn get_bootstrap_token() -> Result<Option<String>, String> {
     serde_wasm_bindgen::from_value::<Option<String>>(result).map_err(|e| e.to_string())
 }
 
+/// Get bootstrap token from daemon log files for automated discovery
+pub async fn get_bootstrap_token_from_logs() -> Result<Option<String>, String> {
+    let result = invoke("get_bootstrap_token_from_logs", JsValue::UNDEFINED).await?;
+
+    serde_wasm_bindgen::from_value::<Option<String>>(result).map_err(|e| e.to_string())
+}
+
 /// Check if a URL is allowed to be opened
 fn is_allowed_url(url: &str) -> bool {
     // Allow localhost URLs for development

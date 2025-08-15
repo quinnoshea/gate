@@ -1,5 +1,5 @@
 use crate::tauri_api::{
-    configure_tlsforward, enable_tlsforward, get_daemon_runtime_config, get_daemon_status,
+    configure_tlsforward, enable_tlsforward, get_bootstrap_token_from_logs, get_daemon_runtime_config, get_daemon_status,
     start_daemon, DaemonRuntimeConfig, Settings, TlsForwardState,
 };
 use gloo_timers::callback::Interval;
@@ -30,6 +30,8 @@ pub struct DaemonStatusComponent {
     show_debug_log: bool,
     needs_email_setup: bool,
     daemon_config: Option<Settings>,
+    bootstrap_token: Option<String>,
+    checking_bootstrap: bool,
 }
 
 pub enum Msg {
@@ -47,6 +49,8 @@ pub enum Msg {
     TlsForwardConfigured,
     ToggleDebugLog,
     OpenUrl(String),
+    CheckBootstrapToken,
+    BootstrapTokenFound(Option<String>),
 }
 
 impl Component for DaemonStatusComponent {
@@ -81,6 +85,8 @@ impl Component for DaemonStatusComponent {
             show_debug_log: false,
             needs_email_setup: false,
             daemon_config: None,
+            bootstrap_token: None,
+            checking_bootstrap: false,
         };
 
         // Fetch initial status immediately
@@ -192,6 +198,8 @@ impl Component for DaemonStatusComponent {
                             )));
                             // Refresh status after starting
                             link.send_message(Msg::Refresh);
+                            // Check for bootstrap token after daemon starts
+                            link.send_message(Msg::CheckBootstrapToken);
                         }
                         Err(e) => {
                             web_sys::console::error_1(
@@ -311,6 +319,48 @@ impl Component for DaemonStatusComponent {
                     }
                 });
                 false
+            }
+            Msg::CheckBootstrapToken => {
+                self.checking_bootstrap = true;
+                ctx.link()
+                    .send_message(Msg::AddDebugMessage("Checking for bootstrap token in logs...".to_string()));
+                let link = ctx.link().clone();
+                spawn_local(async move {
+                    match get_bootstrap_token_from_logs().await {
+                        Ok(token) => {
+                            if let Some(ref token_str) = token {
+                                link.send_message(Msg::AddDebugMessage(format!(
+                                    "✓ Bootstrap token found: {}",
+                                    token_str
+                                )));
+                            } else {
+                                link.send_message(Msg::AddDebugMessage(
+                                    "No bootstrap token found in logs".to_string()
+                                ));
+                            }
+                            link.send_message(Msg::BootstrapTokenFound(token));
+                        }
+                        Err(e) => {
+                            link.send_message(Msg::AddDebugMessage(format!(
+                                "✗ Failed to check bootstrap token: {}",
+                                e
+                            )));
+                            link.send_message(Msg::BootstrapTokenFound(None));
+                        }
+                    }
+                });
+                true
+            }
+            Msg::BootstrapTokenFound(token) => {
+                self.checking_bootstrap = false;
+                self.bootstrap_token = token;
+                if let Some(ref token_str) = self.bootstrap_token {
+                    ctx.link().send_message(Msg::AddDebugMessage(format!(
+                        "Bootstrap token available for setup: {}",
+                        token_str
+                    )));
+                }
+                true
             }
         }
     }
@@ -621,6 +671,24 @@ impl Component for DaemonStatusComponent {
                             >
                                 {"Start Daemon"}
                             </button>
+                        </div>
+                    }
+                } else if let Some(ref token) = self.bootstrap_token {
+                    html! {
+                        <div class={classes!("mt-4", "p-3", "border", "rounded", "text-sm", if is_dark { "bg-blue-900/20 border-blue-700" } else { "bg-blue-50 border-blue-300" })}>
+                            <h4 class={classes!("font-medium", "mb-2", if is_dark { "text-blue-300" } else { "text-blue-800" })}>
+                                {"Bootstrap Setup Available"}
+                            </h4>
+                            <p class={classes!("text-xs", "mb-2", if is_dark { "text-blue-200" } else { "text-blue-700" })}>
+                                {"First-time setup detected. Use this URL to create your admin account:"}
+                            </p>
+                            <div class={classes!("font-mono", "text-xs", "p-2", "rounded", "break-all", if is_dark { "bg-black/20 text-blue-200" } else { "bg-white text-blue-800" })}>
+                                {if let Some(addr) = &self.listen_address {
+                                    format!("http://{}/bootstrap/{}", addr, token)
+                                } else {
+                                    format!("http://localhost:31145/bootstrap/{}", token)
+                                }}
+                            </div>
                         </div>
                     }
                 } else {
