@@ -1,10 +1,7 @@
 use anyhow::Result;
 use clap::Parser;
-use gate_core::tracing::{
-    config::{InstrumentationConfig, OtlpConfig},
-    init::init_tracing,
-};
-use gate_daemon::{Settings, runtime::Runtime};
+use gate_core::tracing::init::init_file_logging;
+use gate_daemon::{Settings, runtime::Runtime, StateDir};
 use tracing::info;
 
 /// Gate daemon - High-performance AI gateway
@@ -29,20 +26,16 @@ async fn main() -> Result<()> {
     // Load environment variables from .env file
     dotenvy::dotenv().ok();
 
-    // Initialize instrumentation
-    let instrumentation_config = InstrumentationConfig {
-        service_name: "gate-daemon".to_string(),
-        service_version: env!("CARGO_PKG_VERSION").to_string(),
-        log_level: std::env::var("RUST_LOG")
-            .unwrap_or_else(|_| "gate=debug,tower_http=debug".to_string()),
-        otlp: std::env::var("OTLP_ENDPOINT")
-            .ok()
-            .map(|endpoint| OtlpConfig {
-                endpoint,
-                headers: None,
-            }),
-    };
-    init_tracing(&instrumentation_config)?;
+    // Initialize file-based logging
+    let state_dir = StateDir::new();
+    let data_dir = state_dir.data_dir();
+    let _log_guard = init_file_logging(&data_dir, None)?;
+    
+    info!(
+        "Gate daemon starting - version: {}, logs: {}/logs/",
+        env!("CARGO_PKG_VERSION"),
+        data_dir.display()
+    );
 
     // Build runtime
     let mut builder = Runtime::builder();
