@@ -231,7 +231,12 @@ pub async fn get_bootstrap_token(state: State<'_, DaemonState>) -> Result<Option
 /// manual entry. Returns None if no token is found in the logs.
 #[tauri::command]
 pub async fn get_bootstrap_token_from_logs() -> Result<Option<String>, String> {
-    let state_dir = StateDir::new();
+    get_bootstrap_token_from_logs_impl(None).await
+}
+
+/// Implementation function that allows overriding StateDir for testing
+async fn get_bootstrap_token_from_logs_impl(state_dir_override: Option<StateDir>) -> Result<Option<String>, String> {
+    let state_dir = state_dir_override.unwrap_or_else(StateDir::new);
     let logs_dir = state_dir.data_dir().join("logs");
     
     // Create parser instance
@@ -301,7 +306,9 @@ mod tests {
 
     /// Test helper to create a mock state directory with test log files
     async fn create_test_logs_with_token(temp_dir: &TempDir, token: &str) -> PathBuf {
-        let logs_dir = temp_dir.path().join("logs");
+        // StateDir::with_override expects data/logs structure
+        let data_dir = temp_dir.path().join("data");
+        let logs_dir = data_dir.join("logs");
         tokio::fs::create_dir_all(&logs_dir).await.unwrap();
         
         let log_file = logs_dir.join("gate.log");
@@ -320,9 +327,16 @@ mod tests {
 
     /// Test helper to create empty logs directory
     async fn create_empty_logs(temp_dir: &TempDir) -> PathBuf {
-        let logs_dir = temp_dir.path().join("logs");
+        let data_dir = temp_dir.path().join("data");
+        let logs_dir = data_dir.join("logs");
         tokio::fs::create_dir_all(&logs_dir).await.unwrap();
         logs_dir
+    }
+
+    /// Test helper to call get_bootstrap_token_from_logs with a test directory
+    async fn call_with_test_dir(temp_dir: &TempDir) -> Result<Option<String>, String> {
+        let state_dir = StateDir::with_override(temp_dir.path());
+        get_bootstrap_token_from_logs_impl(Some(state_dir)).await
     }
 
     #[tokio::test]
@@ -333,20 +347,14 @@ mod tests {
         // Create test logs with token
         let _logs_dir = create_test_logs_with_token(&temp_dir, expected_token).await;
         
-        // Mock StateDir by setting environment variable
-        std::env::set_var("GATE_STATE_DIR", temp_dir.path().to_str().unwrap());
-        
-        // Call the command function
-        let result = get_bootstrap_token_from_logs().await;
+        // Call the test helper function
+        let result = call_with_test_dir(&temp_dir).await;
         
         // Verify success
         assert!(result.is_ok(), "Command should succeed");
         let token = result.unwrap();
         assert!(token.is_some(), "Should find a token");
         assert_eq!(token.unwrap(), expected_token, "Should return the correct token");
-        
-        // Clean up
-        std::env::remove_var("GATE_STATE_DIR");
     }
 
     #[tokio::test]
@@ -356,19 +364,13 @@ mod tests {
         // Create empty logs directory
         let _logs_dir = create_empty_logs(&temp_dir).await;
         
-        // Mock StateDir
-        std::env::set_var("GATE_STATE_DIR", temp_dir.path().to_str().unwrap());
-        
-        // Call the command function
-        let result = get_bootstrap_token_from_logs().await;
+        // Call the test helper function
+        let result = call_with_test_dir(&temp_dir).await;
         
         // Verify success but no token found
         assert!(result.is_ok(), "Command should succeed even with no token");
         let token = result.unwrap();
         assert!(token.is_none(), "Should not find a token in empty logs");
-        
-        // Clean up
-        std::env::remove_var("GATE_STATE_DIR");
     }
 
     #[tokio::test]
@@ -376,24 +378,21 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         
         // Don't create logs directory - this tests the case where logs don't exist yet
-        std::env::set_var("GATE_STATE_DIR", temp_dir.path().to_str().unwrap());
         
-        // Call the command function
-        let result = get_bootstrap_token_from_logs().await;
+        // Call the test helper function
+        let result = call_with_test_dir(&temp_dir).await;
         
         // Should succeed but return None (no logs directory means no tokens)
         assert!(result.is_ok(), "Command should handle missing logs directory gracefully");
         let token = result.unwrap();
         assert!(token.is_none(), "Should return None when logs directory doesn't exist");
-        
-        // Clean up
-        std::env::remove_var("GATE_STATE_DIR");
     }
 
     #[tokio::test]
     async fn test_get_bootstrap_token_from_logs_with_log_file_without_token() {
         let temp_dir = TempDir::new().unwrap();
-        let logs_dir = temp_dir.path().join("logs");
+        let data_dir = temp_dir.path().join("data");
+        let logs_dir = data_dir.join("logs");
         tokio::fs::create_dir_all(&logs_dir).await.unwrap();
         
         // Create log file without bootstrap token
@@ -403,25 +402,20 @@ mod tests {
         file.write_all(b"2025-08-15T15:21:08Z  WARN No tokens here\n").await.unwrap();
         file.flush().await.unwrap();
         
-        // Mock StateDir
-        std::env::set_var("GATE_STATE_DIR", temp_dir.path().to_str().unwrap());
-        
-        // Call the command function
-        let result = get_bootstrap_token_from_logs().await;
+        // Call the test helper function
+        let result = call_with_test_dir(&temp_dir).await;
         
         // Should succeed but return None
         assert!(result.is_ok(), "Command should succeed");
         let token = result.unwrap();
         assert!(token.is_none(), "Should not find token in logs without bootstrap tokens");
-        
-        // Clean up
-        std::env::remove_var("GATE_STATE_DIR");
     }
 
     #[tokio::test]
     async fn test_get_bootstrap_token_from_logs_multiple_tokens_returns_latest() {
         let temp_dir = TempDir::new().unwrap();
-        let logs_dir = temp_dir.path().join("logs");
+        let data_dir = temp_dir.path().join("data");
+        let logs_dir = data_dir.join("logs");
         tokio::fs::create_dir_all(&logs_dir).await.unwrap();
         
         // Create log file with multiple bootstrap tokens
@@ -432,38 +426,29 @@ mod tests {
         file.write_all(b"2025-08-15T12:00:00Z  INFO Generated bootstrap token: NewerToken123456789\n").await.unwrap();
         file.flush().await.unwrap();
         
-        // Mock StateDir
-        std::env::set_var("GATE_STATE_DIR", temp_dir.path().to_str().unwrap());
-        
-        // Call the command function
-        let result = get_bootstrap_token_from_logs().await;
+        // Call the test helper function
+        let result = call_with_test_dir(&temp_dir).await;
         
         // Should return the latest (newer) token
         assert!(result.is_ok(), "Command should succeed");
         let token = result.unwrap();
         assert!(token.is_some(), "Should find a token");
         assert_eq!(token.unwrap(), "NewerToken123456789", "Should return the most recent token");
-        
-        // Clean up
-        std::env::remove_var("GATE_STATE_DIR");
     }
 
     #[tokio::test]
     async fn test_get_bootstrap_token_from_logs_error_handling() {
-        // Test with invalid state directory path
-        std::env::set_var("GATE_STATE_DIR", "/invalid/nonexistent/path/that/should/not/exist");
+        let temp_dir = TempDir::new().unwrap();
+        // Test with invalid state directory path by creating an empty temp dir
         
-        // Call the command function - it should handle the error gracefully
-        let result = get_bootstrap_token_from_logs().await;
+        // Call the test helper function with empty directory
+        let result = call_with_test_dir(&temp_dir).await;
         
         // The function should succeed but return None (no logs found)
         // The BootstrapTokenParser handles missing directories gracefully
         assert!(result.is_ok(), "Command should handle invalid paths gracefully");
         let token = result.unwrap();
         assert!(token.is_none(), "Should return None for invalid paths");
-        
-        // Clean up
-        std::env::remove_var("GATE_STATE_DIR");
     }
 
     // Note: Testing open_daemon_in_browser is challenging because:
