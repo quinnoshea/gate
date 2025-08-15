@@ -32,7 +32,7 @@ pub struct OtlpConfig {
 }
 
 /// File-based logging configuration
-/// 
+///
 /// This configuration controls how logs are written to files with size-based rotation.
 /// When logs exceed max_file_size_mb, they are rotated and older logs are maintained
 /// up to max_files total files.
@@ -82,7 +82,7 @@ impl Default for LogFileConfig {
                         .join("gate")
                 }
             });
-        
+
         Self {
             directory: state_dir.join("logs"),
             file_prefix: "gate".to_string(),
@@ -210,7 +210,7 @@ mod tests {
     #[test]
     fn test_log_file_config_custom() {
         use std::path::PathBuf;
-        
+
         let config = LogFileConfig {
             directory: PathBuf::from("/tmp/test-logs"),
             file_prefix: "test".to_string(),
@@ -218,7 +218,7 @@ mod tests {
             max_files: 15,
             console_enabled: true,
         };
-        
+
         assert_eq!(config.directory, PathBuf::from("/tmp/test-logs"));
         assert_eq!(config.file_prefix, "test");
         assert_eq!(config.max_file_size_mb, 5);
@@ -229,12 +229,12 @@ mod tests {
     #[test]
     fn test_log_file_config_serialization() {
         let config = LogFileConfig::default();
-        
+
         // Test serialization to JSON
         let json = serde_json::to_string(&config).unwrap();
         assert!(json.contains("gate"));
         assert!(json.contains("10"));
-        
+
         // Test deserialization from JSON
         let deserialized: LogFileConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.file_prefix, config.file_prefix);

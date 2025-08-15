@@ -1,6 +1,7 @@
 use crate::tauri_api::{
-    configure_tlsforward, enable_tlsforward, get_bootstrap_token_from_logs, get_daemon_runtime_config, get_daemon_status,
-    open_daemon_in_browser, start_daemon, DaemonRuntimeConfig, Settings, TlsForwardState,
+    configure_tlsforward, enable_tlsforward, get_bootstrap_token_from_logs,
+    get_daemon_runtime_config, get_daemon_status, open_daemon_in_browser, start_daemon,
+    DaemonRuntimeConfig, Settings, TlsForwardState,
 };
 use gloo_timers::callback::Interval;
 use wasm_bindgen::JsCast;
@@ -325,8 +326,9 @@ impl Component for DaemonStatusComponent {
             }
             Msg::CheckBootstrapToken => {
                 self.checking_bootstrap = true;
-                ctx.link()
-                    .send_message(Msg::AddDebugMessage("Checking for bootstrap token in logs...".to_string()));
+                ctx.link().send_message(Msg::AddDebugMessage(
+                    "Checking for bootstrap token in logs...".to_string(),
+                ));
                 let link = ctx.link().clone();
                 spawn_local(async move {
                     match get_bootstrap_token_from_logs().await {
@@ -338,7 +340,7 @@ impl Component for DaemonStatusComponent {
                                 )));
                             } else {
                                 link.send_message(Msg::AddDebugMessage(
-                                    "No bootstrap token found in logs".to_string()
+                                    "No bootstrap token found in logs".to_string(),
                                 ));
                             }
                             link.send_message(Msg::BootstrapTokenFound(token));
@@ -366,8 +368,9 @@ impl Component for DaemonStatusComponent {
                 true
             }
             Msg::OpenDaemonInBrowser => {
-                ctx.link()
-                    .send_message(Msg::AddDebugMessage("Opening daemon in browser...".to_string()));
+                ctx.link().send_message(Msg::AddDebugMessage(
+                    "Opening daemon in browser...".to_string(),
+                ));
                 let link = ctx.link().clone();
                 spawn_local(async move {
                     match open_daemon_in_browser().await {
@@ -382,7 +385,10 @@ impl Component for DaemonStatusComponent {
                                 "✗ Failed to open browser: {}",
                                 e
                             )));
-                            link.send_message(Msg::SetError(format!("Failed to open browser: {}", e)));
+                            link.send_message(Msg::SetError(format!(
+                                "Failed to open browser: {}",
+                                e
+                            )));
                         }
                     }
                 });

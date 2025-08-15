@@ -15,7 +15,7 @@ pub mod tracing;
 #[cfg(any(test, feature = "tests"))]
 pub mod tests;
 
-pub use bootstrap::{BootstrapTokenValidator, BootstrapTokenParser};
+pub use bootstrap::{BootstrapTokenParser, BootstrapTokenValidator};
 pub use context::RequestContext;
 pub use errors::{Error, Result};
 pub use inference::InferenceBackend;

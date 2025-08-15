@@ -1,6 +1,6 @@
 use crate::state::{DaemonState, TlsForwardStatus};
 use gate_core::bootstrap::BootstrapTokenParser;
-use gate_daemon::{Settings, runtime::Runtime, StateDir};
+use gate_daemon::{Settings, StateDir, runtime::Runtime};
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Manager, State};
 use tracing::{error, info};
@@ -225,7 +225,7 @@ pub async fn get_bootstrap_token(state: State<'_, DaemonState>) -> Result<Option
 }
 
 /// Get bootstrap token by parsing log files for automated discovery
-/// 
+///
 /// This command searches through gate daemon log files to find the most recent
 /// bootstrap token, enabling automated bootstrap token discovery instead of
 /// manual entry. Returns None if no token is found in the logs.
@@ -233,16 +233,19 @@ pub async fn get_bootstrap_token(state: State<'_, DaemonState>) -> Result<Option
 pub async fn get_bootstrap_token_from_logs() -> Result<Option<String>, String> {
     let state_dir = StateDir::new();
     let logs_dir = state_dir.data_dir().join("logs");
-    
+
     // Create parser instance
     let parser = BootstrapTokenParser::new(logs_dir)
         .map_err(|e| format!("Failed to initialize bootstrap token parser: {}", e))?;
-    
+
     // Search for the latest token in log files
     match parser.find_latest_token().await {
         Ok(token) => {
             if let Some(ref token_str) = token {
-                info!("Successfully found bootstrap token from logs: {}", token_str);
+                info!(
+                    "Successfully found bootstrap token from logs: {}",
+                    token_str
+                );
             } else {
                 info!("No bootstrap token found in log files");
             }
@@ -256,28 +259,25 @@ pub async fn get_bootstrap_token_from_logs() -> Result<Option<String>, String> {
 }
 
 /// Opens the daemon URL in the default browser.
-/// 
+///
 /// This command gets the current daemon address and opens it in the user's default browser.
 /// If the daemon is not running, returns an error. Uses the opener crate for cross-platform
 /// browser launching.
-/// 
+///
 /// Returns a success message if the browser was opened successfully.
 #[tauri::command]
-pub async fn open_daemon_in_browser(
-    state: State<'_, DaemonState>
-) -> Result<String, String> {
+pub async fn open_daemon_in_browser(state: State<'_, DaemonState>) -> Result<String, String> {
     // Check if daemon is running
     if !state.is_running().await {
         return Err("Daemon is not running".to_string());
     }
-    
+
     // Get runtime to access server address
-    let runtime = state.get_runtime().await
-        .ok_or("Runtime not available")?;
-    
+    let runtime = state.get_runtime().await.ok_or("Runtime not available")?;
+
     let address = runtime.server_address();
     let url = format!("http://{}", address);
-    
+
     // Open URL in default browser using opener crate
     match opener::open(&url) {
         Ok(()) => {
