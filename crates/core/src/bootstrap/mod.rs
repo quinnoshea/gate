@@ -1,4 +1,13 @@
+//! Bootstrap token management
+//!
+//! This module provides functionality for managing bootstrap tokens,
+//! including parsing them from log files for automated discovery.
+
 use async_trait::async_trait;
+
+pub mod parser;
+
+pub use parser::BootstrapTokenParser;
 
 /// Trait for managing bootstrap tokens for initial user enrollment
 #[async_trait]
