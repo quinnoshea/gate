@@ -6,8 +6,11 @@
 mod commands;
 mod state;
 
+use gate_core::tracing::init::init_file_logging;
+use gate_daemon::StateDir;
 use state::DaemonState;
 use tauri::Manager;
+
 
 fn main() {
     // Initialize rustls crypto provider for TLS connections
@@ -15,14 +18,21 @@ fn main() {
         .install_default()
         .expect("Failed to install rustls crypto provider");
 
-    // Initialize tracing for the GUI app
-    tracing_subscriber::fmt()
-        .with_env_filter(std::env::var("RUST_LOG").unwrap_or_else(|_| "".to_string()))
-        .init();
+    // Initialize file-based logging for the GUI app
+    let state_dir = StateDir::new();
+    let data_dir = state_dir.data_dir();
+    let log_guard = init_file_logging(&data_dir, None)
+        .expect("Failed to initialize file logging");
+    
+    tracing::info!(
+        "Gate GUI starting - logs: {}/logs/",
+        data_dir.display()
+    );
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(DaemonState::new())
+        .manage(log_guard) // Keep log guard alive for the application lifetime
         .invoke_handler(tauri::generate_handler![
             commands::start_daemon,
             commands::stop_daemon,
