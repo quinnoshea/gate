@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 /// Main instrumentation configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,6 +31,25 @@ pub struct OtlpConfig {
     pub headers: Option<HashMap<String, String>>,
 }
 
+/// File-based logging configuration
+/// 
+/// This configuration controls how logs are written to files with size-based rotation.
+/// When logs exceed max_file_size_mb, they are rotated and older logs are maintained
+/// up to max_files total files.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogFileConfig {
+    /// Directory where log files should be written
+    pub directory: PathBuf,
+    /// Prefix for log file names (e.g., "gate" creates "gate.log")
+    pub file_prefix: String,
+    /// Maximum size in MB before rotating to a new file
+    pub max_file_size_mb: u64,
+    /// Maximum number of rotated log files to keep
+    pub max_files: usize,
+    /// Whether to also output logs to console (in addition to files)
+    pub console_enabled: bool,
+}
+
 impl Default for InstrumentationConfig {
     fn default() -> Self {
         Self {
@@ -37,6 +57,38 @@ impl Default for InstrumentationConfig {
             service_version: env!("CARGO_PKG_VERSION").to_string(),
             log_level: "info".to_string(),
             otlp: None,
+        }
+    }
+}
+
+impl Default for LogFileConfig {
+    fn default() -> Self {
+        // Use the same state directory pattern as existing Gate components
+        let state_dir = std::env::var("GATE_STATE_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| {
+                if cfg!(target_os = "windows") {
+                    dirs::data_dir()
+                        .unwrap_or_else(|| PathBuf::from("."))
+                        .join("hellas")
+                        .join("gate")
+                } else if cfg!(target_os = "macos") {
+                    dirs::data_dir()
+                        .unwrap_or_else(|| PathBuf::from("."))
+                        .join("com.hellas.gate")
+                } else {
+                    dirs::data_dir()
+                        .unwrap_or_else(|| PathBuf::from("."))
+                        .join("gate")
+                }
+            });
+        
+        Self {
+            directory: state_dir.join("logs"),
+            file_prefix: "gate".to_string(),
+            max_file_size_mb: 10,
+            max_files: 10,
+            console_enabled: cfg!(debug_assertions), // Console enabled in debug, not in release
         }
     }
 }
@@ -143,5 +195,52 @@ mod tests {
         let otlp = config.otlp.unwrap();
         assert_eq!(otlp.endpoint, "http://localhost:4317");
         assert!(otlp.headers.is_none());
+    }
+
+    #[test]
+    fn test_log_file_config_default() {
+        let config = LogFileConfig::default();
+        assert_eq!(config.file_prefix, "gate");
+        assert_eq!(config.max_file_size_mb, 10);
+        assert_eq!(config.max_files, 10);
+        assert_eq!(config.console_enabled, cfg!(debug_assertions));
+        assert!(config.directory.ends_with("logs"));
+    }
+
+    #[test]
+    fn test_log_file_config_custom() {
+        use std::path::PathBuf;
+        
+        let config = LogFileConfig {
+            directory: PathBuf::from("/tmp/test-logs"),
+            file_prefix: "test".to_string(),
+            max_file_size_mb: 5,
+            max_files: 15,
+            console_enabled: true,
+        };
+        
+        assert_eq!(config.directory, PathBuf::from("/tmp/test-logs"));
+        assert_eq!(config.file_prefix, "test");
+        assert_eq!(config.max_file_size_mb, 5);
+        assert_eq!(config.max_files, 15);
+        assert!(config.console_enabled);
+    }
+
+    #[test]
+    fn test_log_file_config_serialization() {
+        let config = LogFileConfig::default();
+        
+        // Test serialization to JSON
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(json.contains("gate"));
+        assert!(json.contains("10"));
+        
+        // Test deserialization from JSON
+        let deserialized: LogFileConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.file_prefix, config.file_prefix);
+        assert_eq!(deserialized.max_file_size_mb, config.max_file_size_mb);
+        assert_eq!(deserialized.max_files, config.max_files);
+        assert_eq!(deserialized.console_enabled, config.console_enabled);
+        assert_eq!(deserialized.directory, config.directory);
     }
 }
