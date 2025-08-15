@@ -1,6 +1,6 @@
 use crate::tauri_api::{
     configure_tlsforward, enable_tlsforward, get_bootstrap_token_from_logs, get_daemon_runtime_config, get_daemon_status,
-    start_daemon, DaemonRuntimeConfig, Settings, TlsForwardState,
+    open_daemon_in_browser, start_daemon, DaemonRuntimeConfig, Settings, TlsForwardState,
 };
 use gloo_timers::callback::Interval;
 use wasm_bindgen::JsCast;
@@ -51,6 +51,7 @@ pub enum Msg {
     OpenUrl(String),
     CheckBootstrapToken,
     BootstrapTokenFound(Option<String>),
+    OpenDaemonInBrowser,
 }
 
 impl Component for DaemonStatusComponent {
@@ -361,6 +362,29 @@ impl Component for DaemonStatusComponent {
                     )));
                 }
                 true
+            }
+            Msg::OpenDaemonInBrowser => {
+                ctx.link()
+                    .send_message(Msg::AddDebugMessage("Opening daemon in browser...".to_string()));
+                let link = ctx.link().clone();
+                spawn_local(async move {
+                    match open_daemon_in_browser().await {
+                        Ok(msg) => {
+                            link.send_message(Msg::AddDebugMessage(format!(
+                                "✓ Browser opened: {}",
+                                msg
+                            )));
+                        }
+                        Err(e) => {
+                            link.send_message(Msg::AddDebugMessage(format!(
+                                "✗ Failed to open browser: {}",
+                                e
+                            )));
+                            link.send_message(Msg::SetError(format!("Failed to open browser: {}", e)));
+                        }
+                    }
+                });
+                false
             }
         }
     }
@@ -689,6 +713,21 @@ impl Component for DaemonStatusComponent {
                                     format!("http://localhost:31145/bootstrap/{}", token)
                                 }}
                             </div>
+                        </div>
+                    }
+                } else {
+                    html! {}
+                }}
+
+                {if self.is_running {
+                    html! {
+                        <div class="mt-4">
+                            <button
+                                onclick={ctx.link().callback(|_| Msg::OpenDaemonInBrowser)}
+                                class={classes!("w-full", "text-white", "border-none", "rounded", "py-2.5", "px-4", "text-sm", "font-medium", "cursor-pointer", "transition-colors", "duration-200", "bg-blue-600", "hover:bg-blue-700")}
+                            >
+                                {"Open Browser"}
+                            </button>
                         </div>
                     }
                 } else {

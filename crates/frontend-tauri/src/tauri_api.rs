@@ -228,6 +228,13 @@ pub async fn get_bootstrap_token_from_logs() -> Result<Option<String>, String> {
     serde_wasm_bindgen::from_value::<Option<String>>(result).map_err(|e| e.to_string())
 }
 
+/// Open daemon URL in default browser
+pub async fn open_daemon_in_browser() -> Result<String, String> {
+    let result = invoke("open_daemon_in_browser", JsValue::UNDEFINED).await?;
+
+    serde_wasm_bindgen::from_value::<String>(result).map_err(|e| e.to_string())
+}
+
 /// Check if a URL is allowed to be opened
 fn is_allowed_url(url: &str) -> bool {
     // Allow localhost URLs for development
