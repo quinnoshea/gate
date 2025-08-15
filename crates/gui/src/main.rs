@@ -11,7 +11,6 @@ use gate_daemon::StateDir;
 use state::DaemonState;
 use tauri::Manager;
 
-
 fn main() {
     // Initialize rustls crypto provider for TLS connections
     rustls::crypto::ring::default_provider()
@@ -21,13 +20,9 @@ fn main() {
     // Initialize file-based logging for the GUI app
     let state_dir = StateDir::new();
     let data_dir = state_dir.data_dir();
-    let log_guard = init_file_logging(&data_dir, None)
-        .expect("Failed to initialize file logging");
-    
-    tracing::info!(
-        "Gate GUI starting - logs: {}/logs/",
-        data_dir.display()
-    );
+    let log_guard = init_file_logging(&data_dir, None).expect("Failed to initialize file logging");
+
+    tracing::info!("Gate GUI starting - logs: {}/logs/", data_dir.display());
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
