@@ -201,6 +201,8 @@ impl Component for DaemonStatusComponent {
                             link.send_message(Msg::Refresh);
                             // Check for bootstrap token after daemon starts
                             link.send_message(Msg::CheckBootstrapToken);
+                            // Open browser after successful daemon start
+                            link.send_message(Msg::OpenDaemonInBrowser);
                         }
                         Err(e) => {
                             web_sys::console::error_1(
@@ -693,7 +695,7 @@ impl Component for DaemonStatusComponent {
                                 onclick={ctx.link().callback(|_| Msg::StartDaemon)}
                                 class={classes!("w-full", "text-white", "border-none", "rounded", "py-2.5", "px-4", "text-sm", "font-medium", "cursor-pointer", "transition-colors", "duration-200", "bg-green-600", "hover:bg-green-700")}
                             >
-                                {"Start Daemon"}
+                                {"Start Daemon & Open Browser"}
                             </button>
                         </div>
                     }
