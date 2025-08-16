@@ -236,7 +236,7 @@ pub async fn get_bootstrap_token_from_logs() -> Result<Option<String>, String> {
 
     // Create parser instance
     let parser = BootstrapTokenParser::new(logs_dir)
-        .map_err(|e| format!("Failed to initialize bootstrap token parser: {}", e))?;
+        .map_err(|e| format!("Failed to initialize bootstrap token parser: {e}"))?;
 
     // Search for the latest token in log files
     match parser.find_latest_token().await {
@@ -253,7 +253,7 @@ pub async fn get_bootstrap_token_from_logs() -> Result<Option<String>, String> {
         }
         Err(e) => {
             error!("Failed to parse bootstrap token from logs: {}", e);
-            Err(format!("Bootstrap token parsing failed: {}", e))
+            Err(format!("Bootstrap token parsing failed: {e}"))
         }
     }
 }
@@ -276,17 +276,17 @@ pub async fn open_daemon_in_browser(state: State<'_, DaemonState>) -> Result<Str
     let runtime = state.get_runtime().await.ok_or("Runtime not available")?;
 
     let address = runtime.server_address();
-    let url = format!("http://{}", address);
+    let url = format!("http://{address}");
 
     // Open URL in default browser using opener crate
     match opener::open(&url) {
         Ok(()) => {
             info!("Successfully opened daemon URL in browser: {}", url);
-            Ok(format!("Opened {} in default browser", url))
+            Ok(format!("Opened {url} in default browser"))
         }
         Err(e) => {
             error!("Failed to open daemon URL in browser: {}", e);
-            Err(format!("Failed to open browser: {}", e))
+            Err(format!("Failed to open browser: {e}"))
         }
     }
 }
