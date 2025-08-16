@@ -183,7 +183,11 @@ mod tests {
         assert_eq!(config.service_name, "gate");
         assert_eq!(config.service_version, env!("CARGO_PKG_VERSION"));
         // Log level should be "info" in debug builds, "error" in release builds
-        let expected_level = if cfg!(debug_assertions) { "info" } else { "error" };
+        let expected_level = if cfg!(debug_assertions) {
+            "info"
+        } else {
+            "error"
+        };
         assert_eq!(config.log_level, expected_level);
         assert!(config.otlp.is_none());
     }
