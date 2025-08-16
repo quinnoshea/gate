@@ -19,7 +19,11 @@ use tracing_appender::non_blocking::WorkerGuard;
 /// Initialize tracing with the given configuration
 pub fn init_tracing(config: &InstrumentationConfig) -> Result<()> {
     // Create env filter with conditional fallback based on build type
-    let fallback_level = if cfg!(debug_assertions) { "info" } else { "error" };
+    let fallback_level = if cfg!(debug_assertions) {
+        "info"
+    } else {
+        "error"
+    };
     let env_filter = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new(&config.log_level))
         .unwrap_or_else(|_| EnvFilter::new(fallback_level));
@@ -192,8 +196,13 @@ pub fn init_file_logging(state_dir: &Path, config: Option<LogFileConfig>) -> Res
     let (non_blocking, guard) = tracing_appender::non_blocking(appender);
 
     // Create environment filter with conditional fallback based on build type
-    let fallback_level = if cfg!(debug_assertions) { "info" } else { "error" };
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(fallback_level));
+    let fallback_level = if cfg!(debug_assertions) {
+        "info"
+    } else {
+        "error"
+    };
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(fallback_level));
 
     // Create file layer
     let file_layer = tracing_subscriber::fmt::layer()
