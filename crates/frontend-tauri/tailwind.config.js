@@ -6,6 +6,21 @@ module.exports = {
     "../frontend-common/src/**/*.rs",
     "../chat-ui/src/**/*.rs",
   ],
+  safelist: [
+    // DEBUG: Force include common classes to test if scanning works
+    'bg-gradient-to-br',
+    'from-gray-900',
+    'via-blue-900', 
+    'to-purple-900',
+    'backdrop-blur-lg',
+    'bg-white/10',
+    'rounded-2xl',
+    'shadow-2xl',
+    'text-3xl',
+    'font-bold',
+    'text-white',
+    'border-white/20',
+  ],
   theme: {
     extend: {
       animation: {
