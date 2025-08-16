@@ -1,32 +1,41 @@
-use crate::state::{DaemonState, TlsForwardStatus};
-use gate_daemon::{Settings, runtime::Runtime};
+use gate_daemon::types::DaemonRuntimeConfigResponse;
+use gate_daemon::{Daemon, DaemonStatus, Settings, StateDir};
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Manager, State};
-use tracing::{error, info};
 
 #[tauri::command]
-pub async fn start_daemon(
-    state: State<'_, DaemonState>,
-    app: AppHandle,
-    config: Option<Settings>,
-) -> Result<String, String> {
-    // Check if already running
-    if state.is_running().await {
-        return Err("Daemon is already running".to_string());
-    }
+pub async fn start_daemon(app: AppHandle) -> Result<String, String> {
+    // Build daemon
+    let state_dir = StateDir::new()
+        .await
+        .map_err(|e| format!("Failed to create state directory: {e}"))?;
+    let default_config_path = state_dir.config_path();
+    let mut builder = Daemon::builder().with_state_dir(state_dir);
 
-    // Load or use provided config
-    let settings = if let Some(cfg) = config {
-        // Save the new config
-        if let Err(e) = state.save_config(&cfg).await {
-            error!("Failed to save GUI config: {}", e);
-        }
-        cfg
+    // Load configuration if specified
+    if default_config_path.exists() {
+        info!(
+            "Loading configuration from default path: {}",
+            default_config_path.display()
+        );
+        builder = builder.with_settings(
+            Settings::load_from_file(&default_config_path)
+                .map_err(|e| format!("Failed to load settings: {e}"))?,
+        );
     } else {
-        state
-            .load_config()
-            .unwrap_or_else(|_| Settings::gui_preset())
-    };
+        info!("No configuration found, creating one using default settings");
+        let settings = Settings::default();
+        settings
+            .save_to_file(&default_config_path)
+            .await
+            .map_err(|e| {
+                format!(
+                    "Failed to save default settings to {}: {e}",
+                    default_config_path.display()
+                )
+            })?;
+        builder = builder.with_settings(settings);
+    }
 
     // Resolve static directory path for frontend files
     let static_dir = if tauri::is_dev() {
@@ -44,181 +53,157 @@ pub async fn start_daemon(
         info!("Running in Tauri production mode, resolved static directory: {dir}");
         dir
     };
+    builder = builder.with_static_dir(static_dir);
 
-    // Build runtime
-    let runtime = Runtime::builder()
-        .gui_mode()
-        .with_static_dir(static_dir)
-        .with_settings(settings)
+    let daemon = builder
         .build()
         .await
-        .map_err(|e| format!("Failed to build runtime: {e}"))?;
+        .map_err(|e| format!("Failed to build daemon: {e}"))?;
 
-    let address = runtime.server_address();
-
-    // Start monitoring
-    runtime.start_monitoring().await;
-
-    // Start metrics if configured
-    runtime
-        .start_metrics()
+    let address = daemon
+        .server_address()
         .await
-        .map_err(|e| format!("Failed to start metrics: {e}"))?;
+        .map_err(|e| format!("Failed to get server address: {e}"))?;
 
     // Spawn server task
-    let runtime_clone = runtime.clone();
-    let handle = tokio::spawn(async move {
-        if let Err(e) = runtime_clone.serve().await {
+    let daemon_clone = daemon.clone();
+    tokio::spawn(async move {
+        if let Err(e) = daemon_clone.serve().await {
             error!("Server error: {}", e);
         }
     });
 
-    // Store runtime and handle
-    state.set_runtime(runtime).await;
-    state.set_handle(handle).await;
+    // Update the managed state with the new daemon
+    app.manage(daemon);
 
     Ok(format!("Daemon started at http://{address}"))
 }
 
 #[tauri::command]
-pub async fn stop_daemon(state: State<'_, DaemonState>) -> Result<String, String> {
-    if !state.is_running().await {
-        return Err("Daemon is not running".to_string());
-    }
+pub async fn stop_daemon(daemon: State<'_, Option<Daemon>>) -> Result<String, String> {
+    let daemon = daemon.as_ref().ok_or("Daemon not running")?;
+    daemon
+        .system_identity()
+        .shutdown()
+        .await
+        .map_err(|e| format!("Failed to shutdown daemon: {e}"))?;
 
-    state.shutdown().await;
     Ok("Daemon stopped successfully".to_string())
 }
 
 #[tauri::command]
-pub async fn daemon_status(state: State<'_, DaemonState>) -> Result<bool, String> {
-    Ok(state.is_running().await)
+pub async fn daemon_status(daemon: State<'_, Option<Daemon>>) -> Result<bool, String> {
+    let daemon = daemon.as_ref().ok_or("Daemon not running")?;
+    Ok(daemon.status().await.map(|s| s.running).unwrap_or(false))
 }
 
 #[tauri::command]
-pub async fn get_daemon_config(state: State<'_, DaemonState>) -> Result<Settings, String> {
-    state
-        .load_config()
-        .map_err(|e| format!("Failed to load config: {e}"))
+pub async fn get_daemon_config(daemon: State<'_, Daemon>) -> Result<Settings, String> {
+    daemon
+        .get_settings()
+        .await
+        .map_err(|e| format!("Failed to get config: {e}"))
 }
 
 #[tauri::command]
 pub async fn restart_daemon(
-    state: State<'_, DaemonState>,
+    daemon: State<'_, Option<Daemon>>,
     app: AppHandle,
-    config: Option<Settings>,
 ) -> Result<String, String> {
     // Stop if running
-    if state.is_running().await {
-        let _ = stop_daemon(state.clone()).await;
-        // Wait a bit for cleanup
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-    }
+    let _ = stop_daemon(daemon).await;
+    app.manage(None::<Daemon>);
 
     // Start with new config
-    start_daemon(state, app, config).await
+    start_daemon(app).await
 }
 
 #[tauri::command]
-pub async fn get_daemon_status(state: State<'_, DaemonState>) -> Result<serde_json::Value, String> {
-    let running = state.is_running().await;
-    let runtime_config = if let Some(runtime) = state.get_runtime().await {
-        serde_json::json!({
-            "address": runtime.server_address(),
-            "tlsforward_enabled": runtime.tlsforward_enabled(),
-        })
-    } else {
-        serde_json::json!({})
-    };
-
-    Ok(serde_json::json!({
-        "running": running,
-        "config": runtime_config,
-    }))
+pub async fn get_daemon_status(daemon: State<'_, Daemon>) -> Result<DaemonStatus, String> {
+    daemon
+        .status()
+        .await
+        .map_err(|e| format!("Failed to get status: {e}"))
 }
 
 #[tauri::command]
 pub async fn get_daemon_runtime_config(
-    state: State<'_, DaemonState>,
-) -> Result<serde_json::Value, String> {
-    if let Some(runtime) = state.get_runtime().await {
-        Ok(serde_json::json!({
-            "server_address": runtime.server_address(),
-            "tlsforward_enabled": runtime.tlsforward_enabled(),
-        }))
-    } else {
-        Err("Runtime not available".to_string())
-    }
+    daemon: State<'_, Daemon>,
+) -> Result<DaemonRuntimeConfigResponse, String> {
+    let status = daemon
+        .status()
+        .await
+        .map_err(|e| format!("Failed to get status: {e}"))?;
+
+    Ok(DaemonRuntimeConfigResponse {
+        server_address: status.listen_address,
+        tlsforward_enabled: status.tlsforward_enabled,
+    })
 }
 
 #[tauri::command]
 pub async fn get_tlsforward_status(
-    state: State<'_, DaemonState>,
-) -> Result<TlsForwardStatus, String> {
-    if let Some(runtime) = state.get_runtime().await {
-        let status = runtime.tlsforward_status().await;
-        Ok(match status {
-            gate_daemon::runtime::TlsForwardStatus::Disabled => TlsForwardStatus::Disabled,
-            gate_daemon::runtime::TlsForwardStatus::Disconnected => TlsForwardStatus::Disconnected,
-            gate_daemon::runtime::TlsForwardStatus::Connecting => TlsForwardStatus::Connecting,
-            gate_daemon::runtime::TlsForwardStatus::Connected { domain } => {
-                TlsForwardStatus::Connected { domain }
-            }
-            gate_daemon::runtime::TlsForwardStatus::Error(e) => TlsForwardStatus::Error(e),
-        })
-    } else {
-        Ok(TlsForwardStatus::Disabled)
-    }
+    daemon: State<'_, Daemon>,
+) -> Result<gate_daemon::TlsForwardStatus, String> {
+    let status = daemon
+        .status()
+        .await
+        .map_err(|e| format!("Failed to get status: {e}"))?;
+    Ok(status.tlsforward_status)
 }
 
 #[tauri::command]
 pub async fn configure_tlsforward(
-    state: State<'_, DaemonState>,
-    _enabled: bool,
-    _server_address: Option<String>,
+    daemon: State<'_, Daemon>,
+    enabled: bool,
+    server_address: Option<String>,
 ) -> Result<String, String> {
-    // Load current config
-    let config = state
-        .load_config()
-        .map_err(|e| format!("Failed to load config: {e}"))?;
+    // Get current config
+    let mut config = daemon
+        .get_settings()
+        .await
+        .map_err(|e| format!("Failed to get config: {e}"))?;
 
     // Update TLS forward config
-    // Note: This would need to be implemented based on how you want to handle
-    // runtime configuration changes
+    config.tlsforward.enabled = enabled;
+    if let Some(addr) = server_address {
+        config.tlsforward.tlsforward_addresses = vec![addr];
+    }
 
-    // Save config
-    state
-        .save_config(&config)
+    // Update daemon config
+    daemon
+        .system_identity()
+        .update_config(config)
         .await
-        .map_err(|e| format!("Failed to save config: {e}"))?;
+        .map_err(|e| format!("Failed to update config: {e}"))?;
 
     Ok("TLS forward configuration updated".to_string())
 }
 
 #[tauri::command]
-pub async fn enable_tlsforward(state: State<'_, DaemonState>) -> Result<String, String> {
-    configure_tlsforward(state, true, None).await
+pub async fn enable_tlsforward(daemon: State<'_, Daemon>) -> Result<String, String> {
+    configure_tlsforward(daemon, true, None).await
 }
 
 #[tauri::command]
-pub async fn disable_tlsforward(state: State<'_, DaemonState>) -> Result<String, String> {
-    configure_tlsforward(state, false, None).await
+pub async fn disable_tlsforward(daemon: State<'_, Daemon>) -> Result<String, String> {
+    configure_tlsforward(daemon, false, None).await
 }
 
 #[tauri::command]
-pub async fn get_bootstrap_url(state: State<'_, DaemonState>) -> Result<Option<String>, String> {
-    if let Some(runtime) = state.get_runtime().await {
-        Ok(runtime.bootstrap_url())
-    } else {
-        Ok(None)
-    }
+pub async fn get_bootstrap_url(daemon: State<'_, Daemon>) -> Result<Option<String>, String> {
+    daemon
+        .bootstrap_url()
+        .await
+        .map_err(|e| format!("Failed to get bootstrap URL: {e}"))
 }
 
 #[tauri::command]
-pub async fn get_bootstrap_token(state: State<'_, DaemonState>) -> Result<Option<String>, String> {
-    if let Some(runtime) = state.get_runtime().await {
-        Ok(runtime.bootstrap_token().map(|s| s.to_string()))
-    } else {
-        Ok(None)
-    }
+pub async fn get_bootstrap_token(daemon: State<'_, Daemon>) -> Result<Option<String>, String> {
+    Ok(daemon
+        .get_bootstrap_manager()
+        .await
+        .map_err(|e| format!("Failed to get bootstrap manager: {e}"))?
+        .get_token()
+        .await)
 }

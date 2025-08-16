@@ -1,6 +1,5 @@
 use anyhow::Result;
-use async_trait::async_trait;
-use gate_core::{BootstrapTokenValidator, WebAuthnBackend};
+use gate_sqlx::SqliteWebAuthnBackend;
 use rand::{Rng, distributions::Alphanumeric};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -9,7 +8,7 @@ use tokio::sync::RwLock;
 #[derive(Clone)]
 pub struct BootstrapTokenManager {
     inner: Arc<RwLock<BootstrapTokenState>>,
-    webauthn_backend: Arc<dyn WebAuthnBackend>,
+    webauthn_backend: Arc<SqliteWebAuthnBackend>,
 }
 
 #[derive(Debug)]
@@ -20,7 +19,7 @@ struct BootstrapTokenState {
 
 impl BootstrapTokenManager {
     /// Creates a new bootstrap token manager
-    pub fn new(webauthn_backend: Arc<dyn WebAuthnBackend>) -> Self {
+    pub fn new(webauthn_backend: Arc<SqliteWebAuthnBackend>) -> Self {
         Self {
             inner: Arc::new(RwLock::new(BootstrapTokenState {
                 token: None,
@@ -95,26 +94,9 @@ impl BootstrapTokenManager {
             None
         }
     }
-}
 
-#[async_trait]
-impl BootstrapTokenValidator for BootstrapTokenManager {
-    async fn validate_token(
-        &self,
-        token: &str,
-    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
-        Ok(self.validate_token(token).await?)
-    }
-
-    async fn mark_token_as_used(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        Ok(self.mark_as_used().await?)
-    }
-
-    async fn is_bootstrap_complete(&self) -> bool {
-        self.is_bootstrap_complete().await
-    }
-
-    async fn needs_bootstrap(&self) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+    /// Checks if bootstrap is needed (no credentials exist)
+    pub async fn needs_bootstrap(&self) -> Result<bool> {
         let credentials = self.webauthn_backend.list_all_credentials().await?;
         Ok(credentials.is_empty())
     }
@@ -123,7 +105,7 @@ impl BootstrapTokenValidator for BootstrapTokenManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gate_sqlx::{SqliteStateBackend, SqlxWebAuthnBackend};
+    use gate_sqlx::{SqliteStateBackend, SqliteWebAuthnBackend};
 
     async fn create_test_manager() -> Arc<BootstrapTokenManager> {
         let state_backend = Arc::new(
@@ -131,7 +113,7 @@ mod tests {
                 .await
                 .expect("Failed to create backend"),
         );
-        let webauthn_backend = Arc::new(SqlxWebAuthnBackend::new(state_backend.pool().clone()));
+        let webauthn_backend = Arc::new(SqliteWebAuthnBackend::new(state_backend.pool().clone()));
         Arc::new(BootstrapTokenManager::new(webauthn_backend))
     }
 

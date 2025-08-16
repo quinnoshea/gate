@@ -10,7 +10,6 @@ use gate_core::{Error, Result};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
-use tracing::{debug, error, info, instrument, warn};
 
 pub struct LocalInferenceService {
     config: LocalInferenceConfig,
@@ -311,6 +310,15 @@ impl InferenceBackend for LocalInferenceService {
                 provider: "local".to_string(),
                 path: None,
                 context_length: 32768,
+                supports_chat: true,
+                supports_completion: true,
+            },
+            LocalModel {
+                id: "huihui-ai/Huihui-Qwen3-14B-abliterated-v2".to_string(),
+                name: "Huihui Qwen3-14B Abliterated V2".to_string(),
+                provider: "local".to_string(),
+                path: None,
+                context_length: 8096,
                 supports_chat: true,
                 supports_completion: true,
             },
