@@ -231,6 +231,7 @@ pub async fn get_bootstrap_token(state: State<'_, DaemonState>) -> Result<Option
 /// bootstrap token, enabling automated bootstrap token discovery instead of
 /// manual entry. Returns None if no token is found in the logs.
 #[cfg(not(target_arch = "wasm32"))]
+#[allow(dead_code)]
 #[tauri::command]
 pub async fn get_bootstrap_token_from_logs() -> Result<Option<String>, String> {
     let state_dir = StateDir::new();
