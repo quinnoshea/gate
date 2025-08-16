@@ -6,7 +6,7 @@
     "frontendDist": "../frontend-tauri/dist",
     "devUrl": "http://localhost:8082",
     "beforeDevCommand": "sh -c 'cd frontend-tauri && trunk serve'",
-    "beforeBuildCommand": "cd crates/frontend-daemon && trunk build --release && cd ../frontend-tauri && trunk build --release"
+    "beforeBuildCommand": "echo 'DEBUG: Starting beforeBuildCommand' && pwd && echo 'DEBUG: Current directory contents:' && ls -la && echo 'DEBUG: Parent directory contents:' && ls -la ../ && echo 'DEBUG: Root directory contents:' && ls -la ../../ && echo 'DEBUG: Looking for frontend directories' && find . -name '*frontend*' -type d && echo 'DEBUG: Attempting to navigate to frontend-daemon' && cd frontend-daemon && pwd && trunk build --release && echo 'DEBUG: Built frontend-daemon, now going to frontend-tauri' && cd ../frontend-tauri && pwd && trunk build --release && echo 'DEBUG: Completed both builds'"
   },
   "app": {
     "windows": [
