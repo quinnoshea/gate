@@ -33,10 +33,13 @@ pub fn tauri_app() -> Html {
     html! {
         <div class={classes!(
             "h-screen", "w-screen", "font-sans", "transition-colors", "duration-300",
-            if *is_dark { "bg-gray-900" } else { "bg-gray-50" }
+            "bg-gradient-to-br", "from-gray-900", "via-blue-900", "to-purple-900"
         )}>
-            <div class="h-full w-full p-8 overflow-y-auto">
-                <DaemonStatusComponent is_dark={*is_dark} />
+            <div class="h-full w-full p-8 overflow-y-auto backdrop-blur-lg bg-white/10 rounded-2xl shadow-2xl border border-white/20">
+                <div class="text-center mb-8">
+                    <h1 class="text-3xl font-bold text-white mb-2">{"Hellas Gate"}</h1>
+                </div>
+                <DaemonStatusComponent is_dark={true} />
             </div>
         </div>
     }
