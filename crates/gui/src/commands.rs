@@ -1,4 +1,5 @@
 use crate::state::{DaemonState, TlsForwardStatus};
+#[cfg(not(target_arch = "wasm32"))]
 use gate_core::bootstrap::BootstrapTokenParser;
 use gate_daemon::{Settings, StateDir, runtime::Runtime};
 use tauri::path::BaseDirectory;
@@ -229,6 +230,7 @@ pub async fn get_bootstrap_token(state: State<'_, DaemonState>) -> Result<Option
 /// This command searches through gate daemon log files to find the most recent
 /// bootstrap token, enabling automated bootstrap token discovery instead of
 /// manual entry. Returns None if no token is found in the logs.
+#[cfg(not(target_arch = "wasm32"))]
 #[tauri::command]
 pub async fn get_bootstrap_token_from_logs() -> Result<Option<String>, String> {
     let state_dir = StateDir::new();
@@ -258,7 +260,7 @@ pub async fn get_bootstrap_token_from_logs() -> Result<Option<String>, String> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
     use std::path::PathBuf;
