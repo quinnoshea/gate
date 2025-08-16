@@ -5,8 +5,8 @@
   "build": {
     "frontendDist": "../frontend-tauri/dist",
     "devUrl": "http://localhost:8082",
-    "beforeDevCommand": "sh -c 'cd ../frontend-tauri && trunk serve'",
-    "beforeBuildCommand": "echo 'DEBUG: PWD before cd:' && pwd && echo 'DEBUG: Contents of current dir:' && ls -la && echo 'DEBUG: Attempting cd to frontend-daemon' && cd ../frontend-daemon && pwd && trunk build --release && cd ../frontend-tauri && pwd && trunk build --release"
+    "beforeDevCommand": "sh -c 'cd frontend-tauri && trunk serve'",
+    "beforeBuildCommand": "echo 'DEBUG: PWD before cd:' && pwd && echo 'DEBUG: Contents of current dir:' && ls -la && echo 'DEBUG: Attempting cd to frontend-daemon' && cd frontend-daemon && pwd && trunk build --release && cd ../frontend-tauri && pwd && trunk build --release"
   },
   "app": {
     "windows": [
