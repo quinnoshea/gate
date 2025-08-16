@@ -2,8 +2,8 @@ use std::fs;
 use std::path::Path;
 
 fn main() {
-    // Copy frontend-daemon dist files to resources directory
-    let frontend_daemon_dist = Path::new("../frontend-daemon/dist");
+    // Copy frontend-tauri dist files to resources directory  
+    let frontend_tauri_dist = Path::new("../frontend-tauri/dist");
     let resources_dir = Path::new("resources/frontend-daemon");
 
     // Remove old resources directory if it exists
@@ -11,20 +11,20 @@ fn main() {
         fs::remove_dir_all(resources_dir).expect("Failed to remove old resources");
     }
 
-    // Only copy if frontend-daemon dist exists
-    if frontend_daemon_dist.exists() {
-        println!("cargo:rerun-if-changed=../frontend-daemon/dist");
+    // Only copy if frontend-tauri dist exists
+    if frontend_tauri_dist.exists() {
+        println!("cargo:rerun-if-changed=../frontend-tauri/dist");
 
         // Create resources directory
         fs::create_dir_all(resources_dir).expect("Failed to create resources directory");
 
-        // Copy all files from frontend-daemon/dist to resources/frontend-daemon
-        copy_dir_all(frontend_daemon_dist, resources_dir)
-            .expect("Failed to copy frontend-daemon files");
+        // Copy all files from frontend-tauri/dist to resources/frontend-daemon
+        copy_dir_all(frontend_tauri_dist, resources_dir)
+            .expect("Failed to copy frontend-tauri files");
 
-        println!("cargo:warning=Copied frontend-daemon files to resources directory");
+        println!("cargo:warning=Copied frontend-tauri files to resources directory");
     } else {
-        println!("cargo:warning=frontend-daemon dist directory not found, skipping resource copy");
+        println!("cargo:warning=frontend-tauri dist directory not found, skipping resource copy");
     }
 
     tauri_build::build()
