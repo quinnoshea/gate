@@ -236,7 +236,7 @@ pub async fn get_bootstrap_token_from_logs() -> Result<Option<String>, String> {
 
     // Create parser instance
     let parser = BootstrapTokenParser::new(logs_dir)
-        .map_err(|e| format!("Failed to initialize bootstrap token parser: {}", e))?;
+        .map_err(|e| format!("Failed to initialize bootstrap token parser: {e}"))?;
 
     // Search for the latest token in log files
     match parser.find_latest_token().await {
@@ -253,7 +253,7 @@ pub async fn get_bootstrap_token_from_logs() -> Result<Option<String>, String> {
         }
         Err(e) => {
             error!("Failed to parse bootstrap token from logs: {}", e);
-            Err(format!("Bootstrap token parsing failed: {}", e))
+            Err(format!("Bootstrap token parsing failed: {e}"))
         }
     }
 }
@@ -276,8 +276,7 @@ mod tests {
 
         // Write a realistic log entry with bootstrap token
         let log_entry = format!(
-            "2025-08-15T15:21:07.988194Z  INFO main ThreadId(01) gate_daemon::runtime::inner: crates/daemon/src/runtime/inner.rs:69: Generated bootstrap token: {}\n",
-            token
+            "2025-08-15T15:21:07.988194Z  INFO main ThreadId(01) gate_daemon::runtime::inner: crates/daemon/src/runtime/inner.rs:69: Generated bootstrap token: {token}\n"
         );
         file.write_all(log_entry.as_bytes()).await.unwrap();
         file.flush().await.unwrap();
