@@ -1,4 +1,5 @@
 pub mod access;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod bootstrap;
 pub mod context;
 pub mod errors;
@@ -15,6 +16,7 @@ pub mod tracing;
 #[cfg(any(test, feature = "tests"))]
 pub mod tests;
 
+#[cfg(not(target_arch = "wasm32"))]
 pub use bootstrap::{BootstrapTokenParser, BootstrapTokenValidator};
 pub use context::RequestContext;
 pub use errors::{Error, Result};
