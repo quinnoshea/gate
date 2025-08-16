@@ -332,8 +332,7 @@ impl Component for DaemonStatusComponent {
                         Ok(token) => {
                             if let Some(ref token_str) = token {
                                 link.send_message(Msg::AddDebugMessage(format!(
-                                    "✓ Bootstrap token found: {}",
-                                    token_str
+                                    "✓ Bootstrap token found: {token_str}"
                                 )));
                             } else {
                                 link.send_message(Msg::AddDebugMessage(
@@ -344,8 +343,7 @@ impl Component for DaemonStatusComponent {
                         }
                         Err(e) => {
                             link.send_message(Msg::AddDebugMessage(format!(
-                                "✗ Failed to check bootstrap token: {}",
-                                e
+                                "✗ Failed to check bootstrap token: {e}"
                             )));
                             link.send_message(Msg::BootstrapTokenFound(None));
                         }
@@ -358,8 +356,7 @@ impl Component for DaemonStatusComponent {
                 self.bootstrap_token = token;
                 if let Some(ref token_str) = self.bootstrap_token {
                     ctx.link().send_message(Msg::AddDebugMessage(format!(
-                        "Bootstrap token available for setup: {}",
-                        token_str
+                        "Bootstrap token available for setup: {token_str}"
                     )));
                 }
                 true
@@ -686,9 +683,9 @@ impl Component for DaemonStatusComponent {
                             </p>
                             <div class={classes!("font-mono", "text-xs", "p-2", "rounded", "break-all", if is_dark { "bg-black/20 text-blue-200" } else { "bg-white text-blue-800" })}>
                                 {if let Some(addr) = &self.listen_address {
-                                    format!("http://{}/bootstrap/{}", addr, token)
+                                    format!("http://{addr}/bootstrap/{token}")
                                 } else {
-                                    format!("http://localhost:31145/bootstrap/{}", token)
+                                    format!("http://localhost:31145/bootstrap/{token}")
                                 }}
                             </div>
                         </div>
