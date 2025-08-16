@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 
 fn main() {
-    // Copy frontend-tauri dist files to resources directory  
+    // Copy frontend-tauri dist files to resources directory
     let frontend_tauri_dist = Path::new("../frontend-tauri/dist");
     let resources_dir = Path::new("resources/frontend-daemon");
 
