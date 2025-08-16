@@ -11,12 +11,12 @@ fn main() {
         fs::remove_dir_all(resources_dir).expect("Failed to remove old resources");
     }
 
+    // Always create resources directory, even if empty
+    fs::create_dir_all(resources_dir).expect("Failed to create resources directory");
+
     // Only copy if frontend-tauri dist exists
     if frontend_tauri_dist.exists() {
         println!("cargo:rerun-if-changed=../frontend-tauri/dist");
-
-        // Create resources directory
-        fs::create_dir_all(resources_dir).expect("Failed to create resources directory");
 
         // Copy all files from frontend-tauri/dist to resources/frontend-daemon
         copy_dir_all(frontend_tauri_dist, resources_dir)
