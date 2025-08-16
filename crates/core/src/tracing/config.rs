@@ -52,10 +52,17 @@ pub struct LogFileConfig {
 
 impl Default for InstrumentationConfig {
     fn default() -> Self {
+        // Use "error" log level in release mode, "info" in debug mode
+        let default_log_level = if cfg!(debug_assertions) {
+            "info"
+        } else {
+            "error"
+        };
+
         Self {
             service_name: "gate".to_string(),
             service_version: env!("CARGO_PKG_VERSION").to_string(),
-            log_level: "info".to_string(),
+            log_level: default_log_level.to_string(),
             otlp: None,
         }
     }
@@ -175,7 +182,9 @@ mod tests {
         let config = InstrumentationConfig::default();
         assert_eq!(config.service_name, "gate");
         assert_eq!(config.service_version, env!("CARGO_PKG_VERSION"));
-        assert_eq!(config.log_level, "info");
+        // Log level should be "info" in debug builds, "error" in release builds
+        let expected_level = if cfg!(debug_assertions) { "info" } else { "error" };
+        assert_eq!(config.log_level, expected_level);
         assert!(config.otlp.is_none());
     }
 
