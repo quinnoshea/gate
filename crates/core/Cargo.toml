@@ -30,7 +30,7 @@ serde.workspace = true
 serde_json.workspace = true
 sqlx-d1 = { version = "0.2.0", optional = true }
 thiserror.workspace = true
-tokio = { workspace = true, features = ["sync", "fs", "io-util"] }
+tokio = { workspace = true, features = ["sync", "io-util"] }
 url.workspace = true
 uuid = { workspace = true, features = ["v4"], optional = true }
 
@@ -49,6 +49,7 @@ getrandom = { workspace = true, features = ["wasm_js"], optional = true }
 
 # Optional dependencies for tracing-otlp feature (native only)
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { workspace = true, features = ["fs"] }
 opentelemetry = { version = "0.30", default-features = false, features = ["trace"], optional = true }
 opentelemetry-otlp = { version = "0.30", default-features = false, features = ["trace", "http-proto", "reqwest-blocking-client"], optional = true }
 opentelemetry_sdk = { version = "0.30", default-features = false, features = ["trace", "rt-tokio"], optional = true }
