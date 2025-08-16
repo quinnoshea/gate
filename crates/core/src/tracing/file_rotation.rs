@@ -50,7 +50,7 @@ impl SizeBasedAppender {
         let max_size_bytes = max_size_mb * 1024 * 1024;
 
         // Get current file size if it exists
-        let current_path = directory.join(format!("{}.log", file_prefix));
+        let current_path = directory.join(format!("{file_prefix}.log"));
         let current_size = if current_path.exists() {
             current_path.metadata()?.len()
         } else {
