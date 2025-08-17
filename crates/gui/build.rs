@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 
 fn main() {
-    // Copy frontend-daemon dist files to resources directory  
+    // Copy frontend-daemon dist files to resources directory
     let frontend_daemon_dist = Path::new("../frontend-daemon/dist");
     let resources_dir = Path::new("resources/frontend-daemon");
 
