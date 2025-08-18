@@ -12,4 +12,3 @@ pub mod metrics;
 pub mod prelude;
 pub mod prometheus;
 pub mod trace_context;
-
