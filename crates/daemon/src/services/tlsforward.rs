@@ -1,7 +1,6 @@
 //! TLS forward service for managing P2P TLS forwarding connections
 
 use crate::config::TlsForwardConfig;
-use crate::tracing::Instrument;
 use anyhow::{Context, Result};
 use gate_p2p::Endpoint;
 use gate_tlsforward::TlsForwardClient;
@@ -10,6 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{RwLock, watch};
 use tokio::time;
+use tracing::Instrument;
 
 /// TLS forward service state
 #[derive(Debug, Clone, PartialEq)]

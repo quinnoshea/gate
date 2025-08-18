@@ -1,6 +1,5 @@
 //! Request dispatcher for forwarding inference requests to upstreams
 
-use crate::tracing::Instrument;
 use crate::{error::HttpError, forwarding::UpstreamRegistry};
 use axum::{
     body::Body,
@@ -8,7 +7,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use gate_core::InferenceBackend;
-use gate_core::tracing::{CorrelationId, trace_context::inject_trace_context};
+use gate_core::tracing::prelude::*;
+use gate_core::tracing::trace_context::inject_trace_context;
 use serde_json::Value as JsonValue;
 use std::sync::Arc;
 

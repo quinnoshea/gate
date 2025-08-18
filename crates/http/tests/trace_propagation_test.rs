@@ -3,7 +3,7 @@
 #![cfg(not(all()))] // Disable for now
 
 use axum::Router;
-use gate_core::tracing::{CorrelationId, trace_context::TraceContext};
+use gate_core::tracing::{prelude::CorrelationId, trace_context::TraceContext};
 use gate_http::{middleware::correlation::correlation_id_middleware, routes, state::AppState};
 use http::{HeaderMap, HeaderValue, StatusCode};
 use std::sync::Arc;
